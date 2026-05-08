@@ -1,7 +1,8 @@
-import { Body, Controller, Inject, Module, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Module, Post, UsePipes, ValidationPipe } from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
 
 import { RecomputeDto } from "./dto/recompute.dto";
-import { FinancialRepository } from "./repository/financial.repository";
+import { FinancialRepository, PRISMA_CLIENT } from "./repository/financial.repository";
 import { RecomputeService } from "./service/recompute.service";
 
 @Controller("financial")
@@ -12,14 +13,22 @@ class FinancialController {
   ) {}
 
   @Post("recompute")
-  recompute(@Body() body: RecomputeDto): { recomputedKeys: string[] } {
-    const recomputedKeys = this.recomputeService.recomputeTarget(body);
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async recompute(@Body() body: RecomputeDto): Promise<{ recomputedKeys: string[] }> {
+    const recomputedKeys = await this.recomputeService.recomputeTarget(body);
     return { recomputedKeys };
   }
 }
 
 @Module({
   controllers: [FinancialController],
-  providers: [FinancialRepository, RecomputeService]
+  providers: [
+    FinancialRepository,
+    RecomputeService,
+    {
+      provide: PRISMA_CLIENT,
+      useFactory: () => new PrismaClient()
+    }
+  ]
 })
 export class FinancialModule {}

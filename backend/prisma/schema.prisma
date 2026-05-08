@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum MonthlyFactStatus {
+  blocked
+  provisional
+  final
+}
+
 model MonthlyFact {
   id             String   @id @default(cuid())
   employeeId     String   @map("employee_id")
@@ -21,7 +27,7 @@ model MonthlyFact {
   plannedMargin  Float    @default(0) @map("planned_margin")
   actualMargin   Float    @default(0) @map("actual_margin")
   marginVariance Float    @default(0) @map("margin_variance")
-  status         String
+  status         MonthlyFactStatus
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

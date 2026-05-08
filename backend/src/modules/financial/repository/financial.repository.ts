@@ -1,28 +1,34 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { MonthlyFactStatus, PrismaClient } from "@prisma/client";
 
-interface MonthlyFactRecord {
-  employeeId: string;
-  projectId: string;
-  month: string;
-  computeKey: string;
-}
+export const PRISMA_CLIENT = Symbol("PRISMA_CLIENT");
 
 @Injectable()
 export class FinancialRepository {
-  private readonly monthlyFacts = new Map<string, MonthlyFactRecord>();
+  constructor(
+    @Inject(PRISMA_CLIENT)
+    private readonly prismaClient: PrismaClient
+  ) {}
 
-  upsertMonthlyFact(input: {
+  async upsertMonthlyFact(input: {
     employeeId: string;
     projectId: string;
     month: string;
-  }): string {
+  }): Promise<string> {
     const computeKey = this.buildComputeKey(input.employeeId, input.projectId, input.month);
 
-    this.monthlyFacts.set(computeKey, {
-      employeeId: input.employeeId,
-      projectId: input.projectId,
-      month: input.month,
-      computeKey
+    await this.prismaClient.monthlyFact.upsert({
+      where: { computeKey },
+      update: {
+        status: MonthlyFactStatus.final
+      },
+      create: {
+        employeeId: input.employeeId,
+        projectId: input.projectId,
+        month: input.month,
+        computeKey,
+        status: MonthlyFactStatus.final
+      }
     });
 
     return computeKey;

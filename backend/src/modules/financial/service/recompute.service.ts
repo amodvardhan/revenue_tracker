@@ -10,8 +10,8 @@ export class RecomputeService {
     private readonly financialRepository: FinancialRepository
   ) {}
 
-  recomputeTarget(input: RecomputeDto): string[] {
-    const recomputedKey = this.financialRepository.upsertMonthlyFact(input);
+  async recomputeTarget(input: RecomputeDto): Promise<string[]> {
+    const recomputedKey = await this.financialRepository.upsertMonthlyFact(input);
     return [recomputedKey];
   }
 }

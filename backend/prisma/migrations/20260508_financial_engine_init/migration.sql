@@ -1,3 +1,5 @@
+CREATE TYPE "MonthlyFactStatus" AS ENUM ('blocked', 'provisional', 'final');
+
 CREATE TABLE "monthly_facts" (
     "id" TEXT NOT NULL,
     "employee_id" TEXT NOT NULL,
@@ -12,7 +14,7 @@ CREATE TABLE "monthly_facts" (
     "planned_margin" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "actual_margin" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "margin_variance" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "status" TEXT NOT NULL,
+    "status" "MonthlyFactStatus" NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
