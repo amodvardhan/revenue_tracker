@@ -1,4 +1,4 @@
-import { Body, Controller, Inject, Module, Post, UsePipes, ValidationPipe } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Module, Post, UsePipes, ValidationPipe } from "@nestjs/common";
 
 import { RecomputeDto } from "./dto/recompute.dto";
 import { FinancialRepository, PRISMA_CLIENT } from "./repository/financial.repository";
@@ -17,6 +17,28 @@ class FinancialController {
   async recompute(@Body() body: RecomputeDto): Promise<{ recomputedKeys: string[] }> {
     const recomputedKeys = await this.recomputeService.recomputeTarget(body);
     return { recomputedKeys };
+  }
+
+  @Get("dashboard")
+  async getDashboard(): Promise<{
+    totals: { plannedMargin: number; actualMargin: number; marginVariance: number };
+  }> {
+    return this.recomputeService.getDashboardSummary();
+  }
+
+  @Get("export")
+  async getExport(): Promise<{
+    rows: Array<{
+      employeeId: string;
+      projectId: string;
+      month: string;
+      plannedMargin: number;
+      actualMargin: number;
+      marginVariance: number;
+    }>;
+    totals: { plannedMargin: number; actualMargin: number; marginVariance: number };
+  }> {
+    return this.recomputeService.getExportSnapshot();
   }
 }
 
