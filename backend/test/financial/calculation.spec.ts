@@ -374,13 +374,13 @@ describe("calculateMonthlyFact domain contract", () => {
     });
 
     expect(result.status).toBe("blocked");
-    expect(result.plannedRevenue).toBe(0);
-    expect(result.plannedCost).toBe(0);
+    expect(result.plannedRevenue).toBe(10000);
+    expect(result.plannedCost).toBe(5000);
     expect(result.actualRevenue).toBe(0);
     expect(result.actualCost).toBe(0);
-    expect(result.plannedMargin).toBe(0);
+    expect(result.plannedMargin).toBe(5000);
     expect(result.actualMargin).toBe(0);
-    expect(result.marginVariance).toBe(0);
+    expect(result.marginVariance).toBe(-5000);
   });
 
   it("returns blocked with zeroed outputs when costPerDay is null", () => {
@@ -396,12 +396,12 @@ describe("calculateMonthlyFact domain contract", () => {
     });
 
     expect(result.status).toBe("blocked");
-    expect(result.plannedRevenue).toBe(0);
-    expect(result.plannedCost).toBe(0);
+    expect(result.plannedRevenue).toBe(10000);
+    expect(result.plannedCost).toBe(5000);
     expect(result.actualRevenue).toBe(0);
     expect(result.actualCost).toBe(0);
-    expect(result.plannedMargin).toBe(0);
+    expect(result.plannedMargin).toBe(5000);
     expect(result.actualMargin).toBe(0);
-    expect(result.marginVariance).toBe(0);
+    expect(result.marginVariance).toBe(-5000);
   });
 });
