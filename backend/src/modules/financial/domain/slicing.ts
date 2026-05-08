@@ -13,7 +13,7 @@ interface CostSlice {
   startDate: string;
   endDate: string;
   costPerDay: number;
-  calendarDays: number;
+  businessDays: number;
 }
 
 const YEAR_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -109,7 +109,7 @@ function buildSlice(yearMonth: string, startDay: number, endDay: number, costPer
     startDate: `${yearMonth}-${to2Digits(startDay)}`,
     endDate: `${yearMonth}-${to2Digits(endDay)}`,
     costPerDay,
-    calendarDays: endDay - startDay + 1
+    businessDays: endDay - startDay + 1
   };
 }
 

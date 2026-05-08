@@ -77,13 +77,13 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-15",
         costPerDay: 500,
-        calendarDays: 15
+        businessDays: 15
       },
       {
         startDate: "2026-05-16",
         endDate: "2026-05-31",
         costPerDay: 700,
-        calendarDays: 16
+        businessDays: 16
       }
     ]);
     expectContiguousCoverage(result, "2026-05");
@@ -101,7 +101,7 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-31",
         costPerDay: 500,
-        calendarDays: 31
+        businessDays: 31
       }
     ]);
   });
@@ -118,7 +118,7 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-31",
         costPerDay: 700,
-        calendarDays: 31
+        businessDays: 31
       }
     ]);
   });
@@ -135,13 +135,13 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-30",
         costPerDay: 500,
-        calendarDays: 30
+        businessDays: 30
       },
       {
         startDate: "2026-05-31",
         endDate: "2026-05-31",
         costPerDay: 700,
-        calendarDays: 1
+        businessDays: 1
       }
     ]);
   });
@@ -161,19 +161,19 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-09",
         costPerDay: 500,
-        calendarDays: 9
+        businessDays: 9
       },
       {
         startDate: "2026-05-10",
         endDate: "2026-05-19",
         costPerDay: 600,
-        calendarDays: 10
+        businessDays: 10
       },
       {
         startDate: "2026-05-20",
         endDate: "2026-05-31",
         costPerDay: 800,
-        calendarDays: 12
+        businessDays: 12
       }
     ]);
   });
@@ -193,13 +193,13 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-15",
         costPerDay: 500,
-        calendarDays: 15
+        businessDays: 15
       },
       {
         startDate: "2026-05-16",
         endDate: "2026-05-31",
         costPerDay: 750,
-        calendarDays: 16
+        businessDays: 16
       }
     ]);
   });
@@ -246,13 +246,13 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2024-02-01",
         endDate: "2024-02-28",
         costPerDay: 500,
-        calendarDays: 28
+        businessDays: 28
       },
       {
         startDate: "2024-02-29",
         endDate: "2024-02-29",
         costPerDay: 700,
-        calendarDays: 1
+        businessDays: 1
       }
     ]);
   });
@@ -285,7 +285,7 @@ describe("sliceMonthByEvents domain contract", () => {
 interface SliceLike {
   startDate: string;
   endDate: string;
-  calendarDays: number;
+  businessDays: number;
 }
 
 function expectContiguousCoverage(slices: SliceLike[], yearMonth: string): void {
@@ -301,7 +301,7 @@ function expectContiguousCoverage(slices: SliceLike[], yearMonth: string): void 
     expect(nextStart).toBe(prevEnd + 1);
   }
 
-  const coveredDays = slices.reduce((sum, slice) => sum + slice.calendarDays, 0);
+  const coveredDays = slices.reduce((sum, slice) => sum + slice.businessDays, 0);
   expect(coveredDays).toBe(expectedLastDay);
 }
 
