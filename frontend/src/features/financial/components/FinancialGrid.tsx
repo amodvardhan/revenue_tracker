@@ -1,10 +1,11 @@
 import React from "react";
 import type { MonthlyFinancialFact, MonthlyFactStatus } from "../models/financial";
+import type { FinancialApiError } from "../services/financialApi";
 
 interface FinancialGridProps {
   facts: MonthlyFinancialFact[];
   isLoading: boolean;
-  error: string | null;
+  error: FinancialApiError | null;
 }
 
 function formatVariance(value: number): string {
@@ -29,7 +30,7 @@ export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): 
   }
 
   if (error) {
-    return <p>{error}</p>;
+    return <p>{error.message}</p>;
   }
 
   if (facts.length === 0) {
@@ -47,7 +48,7 @@ export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): 
       </thead>
       <tbody>
         {facts.map((fact) => (
-          <tr key={fact.month}>
+          <tr key={fact.computeKey}>
             <td>{fact.month}</td>
             <td>{formatStatus(fact.status)}</td>
             <td>{formatVariance(fact.marginVariance)}</td>

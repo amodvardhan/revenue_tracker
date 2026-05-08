@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import type { MonthlyFinancialFact } from "../models/financial";
-import { getFinancialFacts } from "../services/financialApi";
+import { FinancialApiError, getFinancialFacts } from "../services/financialApi";
 
 interface UseFinancialFactsResult {
   facts: MonthlyFinancialFact[];
   isLoading: boolean;
-  error: string | null;
+  error: FinancialApiError | null;
 }
 
 export function useFinancialFacts(): UseFinancialFactsResult {
   const [facts, setFacts] = useState<MonthlyFinancialFact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FinancialApiError | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -25,12 +25,12 @@ export function useFinancialFacts(): UseFinancialFactsResult {
 
         setFacts(nextFacts);
         setError(null);
-      } catch {
+      } catch (error) {
         if (!isMounted) {
           return;
         }
 
-        setError("Unable to load monthly financial facts.");
+        setError(toFinancialApiError(error));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -46,4 +46,16 @@ export function useFinancialFacts(): UseFinancialFactsResult {
   }, []);
 
   return { facts, isLoading, error };
+}
+
+function toFinancialApiError(error: unknown): FinancialApiError {
+  if (error instanceof FinancialApiError) {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return new FinancialApiError("network_error", `Unable to load monthly financial facts: ${error.message}`);
+  }
+
+  return new FinancialApiError("network_error", "Unable to load monthly financial facts.");
 }
