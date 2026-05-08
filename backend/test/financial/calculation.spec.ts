@@ -1,4 +1,5 @@
 import { buildMonthInput } from "../../src/modules/financial/domain/buildMonthInput";
+import { sliceMonthByEvents } from "../../src/modules/financial/domain/slicing";
 
 describe("buildMonthInput domain contract", () => {
   it("builds computeKey and expectedDays for a monthly allocation", () => {
@@ -60,5 +61,30 @@ describe("buildMonthInput domain contract", () => {
         allocationPercent: 50
       })
     ).toThrow("baselineDays must be fixed at 20");
+  });
+});
+
+describe("sliceMonthByEvents domain contract", () => {
+  it("splits month when cost/day changes mid-month", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: [{ effectiveDate: "2026-05-16", costPerDay: 700 }]
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2026-05-01",
+        endDate: "2026-05-15",
+        costPerDay: 500,
+        businessDays: 15
+      },
+      {
+        startDate: "2026-05-16",
+        endDate: "2026-05-31",
+        costPerDay: 700,
+        businessDays: 16
+      }
+    ]);
   });
 });
