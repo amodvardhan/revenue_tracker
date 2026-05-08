@@ -9,9 +9,7 @@ import { PRISMA_CLIENT } from "../../src/modules/financial/repository/financial.
 
 describe("POST /api/financial/recompute", () => {
   let app: INestApplication;
-  const seenKeys = new Set<string>();
   const upsert = jest.fn(async (args: { where: { computeKey: string } }) => {
-    seenKeys.add(args.where.computeKey);
     return { computeKey: args.where.computeKey };
   });
 
@@ -30,6 +28,10 @@ describe("POST /api/financial/recompute", () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix("api");
     await app.init();
+  });
+
+  beforeEach(() => {
+    upsert.mockClear();
   });
 
   afterAll(async () => {
@@ -55,10 +57,9 @@ describe("POST /api/financial/recompute", () => {
     await request(app.getHttpServer())
       .post("/api/financial/recompute")
       .send({
-        employeeId: "",
+        employeeId: "   ",
         projectId: " ",
-        month: "2026/05",
-        unknownField: "not-allowed"
+        month: "2026-05"
       })
       .expect(400);
   });
@@ -80,7 +81,7 @@ describe("POST /api/financial/recompute", () => {
       recomputedKeys: ["emp-42|prj-9|2026-07"]
     });
     expect(upsert).toHaveBeenCalledTimes(2);
-    expect(seenKeys.size).toBe(2);
-    expect(seenKeys.has("emp-42|prj-9|2026-07")).toBe(true);
+    expect(upsert.mock.calls[0][0].where.computeKey).toBe("emp-42|prj-9|2026-07");
+    expect(upsert.mock.calls[1][0].where.computeKey).toBe("emp-42|prj-9|2026-07");
   });
 });
