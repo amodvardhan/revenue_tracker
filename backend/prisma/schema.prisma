@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MonthlyFact {
+  id             String   @id @default(cuid())
+  employeeId     String   @map("employee_id")
+  projectId      String   @map("project_id")
+  month          String
+  computeKey     String   @unique @map("compute_key")
+  expectedDays   Float    @default(0) @map("expected_days")
+  plannedRevenue Float    @default(0) @map("planned_revenue")
+  plannedCost    Float    @default(0) @map("planned_cost")
+  actualRevenue  Float    @default(0) @map("actual_revenue")
+  actualCost     Float    @default(0) @map("actual_cost")
+  plannedMargin  Float    @default(0) @map("planned_margin")
+  actualMargin   Float    @default(0) @map("actual_margin")
+  marginVariance Float    @default(0) @map("margin_variance")
+  status         String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([employeeId, projectId, month], map: "monthly_facts_employee_project_month_key")
+  @@map("monthly_facts")
+}
