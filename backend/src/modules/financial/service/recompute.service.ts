@@ -1,7 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { RecomputeDto } from "../dto/recompute.dto";
-import { FinancialRepository, ReconciliationFactRow } from "../repository/financial.repository";
+import {
+  FinancialRepository,
+  MonthlyFinancialFactRow,
+  ReconciliationFactRow
+} from "../repository/financial.repository";
 
 interface MarginTotals {
   plannedMargin: number;
@@ -19,11 +23,16 @@ interface ReconciliationReport {
   totals: MarginTotals;
 }
 
+type FinancialRepositoryContract = Pick<
+  FinancialRepository,
+  "upsertMonthlyFact" | "listFactsForReconciliation" | "listFinancialFacts"
+>;
+
 @Injectable()
 export class RecomputeService {
   constructor(
     @Inject(FinancialRepository)
-    private readonly financialRepository: FinancialRepository
+    private readonly financialRepository: FinancialRepositoryContract
   ) {}
 
   async recomputeTarget(input: RecomputeDto): Promise<string[]> {
@@ -42,6 +51,10 @@ export class RecomputeService {
       rows: report.rows,
       totals: report.totals
     };
+  }
+
+  async getFinancialFacts(): Promise<MonthlyFinancialFactRow[]> {
+    return this.financialRepository.listFinancialFacts();
   }
 
   async getReconciliationReport(): Promise<ReconciliationReport> {

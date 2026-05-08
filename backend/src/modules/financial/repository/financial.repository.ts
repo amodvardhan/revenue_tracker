@@ -12,6 +12,15 @@ export interface ReconciliationFactRow {
   marginVariance: number;
 }
 
+export interface MonthlyFinancialFactRow {
+  computeKey: string;
+  month: string;
+  status: "blocked" | "provisional" | "final";
+  plannedMargin: number;
+  actualMargin: number;
+  marginVariance: number;
+}
+
 @Injectable()
 export class FinancialRepository {
   constructor(
@@ -49,6 +58,19 @@ export class FinancialRepository {
         employeeId: true,
         projectId: true,
         month: true,
+        plannedMargin: true,
+        actualMargin: true,
+        marginVariance: true
+      }
+    });
+  }
+
+  async listFinancialFacts(): Promise<MonthlyFinancialFactRow[]> {
+    return this.prismaClient.monthlyFact.findMany({
+      select: {
+        computeKey: true,
+        month: true,
+        status: true,
         plannedMargin: true,
         actualMargin: true,
         marginVariance: true

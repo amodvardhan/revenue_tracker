@@ -40,6 +40,20 @@ class FinancialController {
   }> {
     return this.recomputeService.getExportSnapshot();
   }
+
+  @Get("facts")
+  async getFacts(): Promise<
+    Array<{
+      computeKey: string;
+      month: string;
+      status: "blocked" | "provisional" | "final";
+      plannedMargin: number;
+      actualMargin: number;
+      marginVariance: number;
+    }>
+  > {
+    return this.recomputeService.getFinancialFacts();
+  }
 }
 
 @Module({

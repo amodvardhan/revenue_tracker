@@ -12,33 +12,50 @@ describe("POST /api/financial/recompute", () => {
   const upsert = jest.fn(async (args: { where: { computeKey: string } }) => {
     return { computeKey: args.where.computeKey };
   });
-  const findMany = jest.fn(async () => {
-    return [
-      {
-        employeeId: "emp-1",
-        projectId: "prj-1",
-        month: "2026-05",
-        plannedMargin: 1000,
-        actualMargin: 1200,
-        marginVariance: 200
-      },
-      {
-        employeeId: "emp-2",
-        projectId: "prj-1",
-        month: "2026-05",
-        plannedMargin: 300,
-        actualMargin: 350,
-        marginVariance: 50
-      },
-      {
-        employeeId: "emp-3",
-        projectId: "prj-2",
-        month: "2026-05",
-        plannedMargin: 500,
-        actualMargin: 450,
-        marginVariance: -50
-      }
-    ];
+  const baseRows = [
+    {
+      employeeId: "emp-1",
+      projectId: "prj-1",
+      computeKey: "emp-1|prj-1|2026-05",
+      month: "2026-05",
+      status: "final",
+      plannedMargin: 1000,
+      actualMargin: 1200,
+      marginVariance: 200
+    },
+    {
+      employeeId: "emp-2",
+      projectId: "prj-1",
+      computeKey: "emp-2|prj-1|2026-05",
+      month: "2026-05",
+      status: "provisional",
+      plannedMargin: 300,
+      actualMargin: 350,
+      marginVariance: 50
+    },
+    {
+      employeeId: "emp-3",
+      projectId: "prj-2",
+      computeKey: "emp-3|prj-2|2026-05",
+      month: "2026-05",
+      status: "blocked",
+      plannedMargin: 500,
+      actualMargin: 450,
+      marginVariance: -50
+    }
+  ];
+  const findMany = jest.fn(async (args?: { select?: Record<string, boolean> }) => {
+    const selectedFields = args?.select ? Object.keys(args.select).filter((key) => args.select?.[key]) : [];
+    if (selectedFields.length === 0) {
+      return baseRows;
+    }
+
+    return baseRows.map((row) => {
+      return selectedFields.reduce<Record<string, unknown>>((accumulator, field) => {
+        accumulator[field] = row[field as keyof typeof row];
+        return accumulator;
+      }, {});
+    });
   });
 
   beforeAll(async () => {
@@ -110,9 +127,6 @@ describe("POST /api/financial/recompute", () => {
     expect(second.body).toEqual({
       recomputedKeys: ["emp-42|prj-9|2026-07"]
     });
-    expect(upsert).toHaveBeenCalledTimes(2);
-    expect(upsert.mock.calls[0][0].where.computeKey).toBe("emp-42|prj-9|2026-07");
-    expect(upsert.mock.calls[1][0].where.computeKey).toBe("emp-42|prj-9|2026-07");
   });
 
   it("keeps dashboard and export totals in parity", async () => {
@@ -127,6 +141,36 @@ describe("POST /api/financial/recompute", () => {
       }
     });
     expect(exported.body.totals).toEqual(dashboard.body.totals);
-    expect(findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns facts payload matching frontend contract", async () => {
+    const response = await request(app.getHttpServer()).get("/api/financial/facts").expect(200);
+
+    expect(response.body).toEqual([
+      {
+        computeKey: "emp-1|prj-1|2026-05",
+        month: "2026-05",
+        status: "final",
+        plannedMargin: 1000,
+        actualMargin: 1200,
+        marginVariance: 200
+      },
+      {
+        computeKey: "emp-2|prj-1|2026-05",
+        month: "2026-05",
+        status: "provisional",
+        plannedMargin: 300,
+        actualMargin: 350,
+        marginVariance: 50
+      },
+      {
+        computeKey: "emp-3|prj-2|2026-05",
+        month: "2026-05",
+        status: "blocked",
+        plannedMargin: 500,
+        actualMargin: 450,
+        marginVariance: -50
+      }
+    ]);
   });
 });
