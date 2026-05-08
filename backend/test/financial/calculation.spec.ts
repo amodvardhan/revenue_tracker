@@ -360,4 +360,48 @@ describe("calculateMonthlyFact domain contract", () => {
     expect(result.actualMargin).toBe(5000);
     expect(result.marginVariance).toBe(0);
   });
+
+  it("returns blocked with zeroed outputs when billRate is null", () => {
+    const result = calculateMonthlyFact({
+      expectedDays: 10,
+      plannedBillRate: 1000,
+      plannedCostPerDay: 500,
+      actualRegularDays: 8,
+      actualExtraDays: 2,
+      billRate: null,
+      extraDayRate: 1200,
+      costPerDay: 500
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.plannedRevenue).toBe(0);
+    expect(result.plannedCost).toBe(0);
+    expect(result.actualRevenue).toBe(0);
+    expect(result.actualCost).toBe(0);
+    expect(result.plannedMargin).toBe(0);
+    expect(result.actualMargin).toBe(0);
+    expect(result.marginVariance).toBe(0);
+  });
+
+  it("returns blocked with zeroed outputs when costPerDay is null", () => {
+    const result = calculateMonthlyFact({
+      expectedDays: 10,
+      plannedBillRate: 1000,
+      plannedCostPerDay: 500,
+      actualRegularDays: 8,
+      actualExtraDays: 2,
+      billRate: 1000,
+      extraDayRate: 1200,
+      costPerDay: null
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.plannedRevenue).toBe(0);
+    expect(result.plannedCost).toBe(0);
+    expect(result.actualRevenue).toBe(0);
+    expect(result.actualCost).toBe(0);
+    expect(result.plannedMargin).toBe(0);
+    expect(result.actualMargin).toBe(0);
+    expect(result.marginVariance).toBe(0);
+  });
 });
