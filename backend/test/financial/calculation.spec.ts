@@ -77,14 +77,243 @@ describe("sliceMonthByEvents domain contract", () => {
         startDate: "2026-05-01",
         endDate: "2026-05-15",
         costPerDay: 500,
-        businessDays: 15
+        calendarDays: 15
       },
       {
         startDate: "2026-05-16",
         endDate: "2026-05-31",
         costPerDay: 700,
-        businessDays: 16
+        calendarDays: 16
+      }
+    ]);
+    expectContiguousCoverage(result, "2026-05");
+  });
+
+  it("returns one full-month slice when there are no events", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: []
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2026-05-01",
+        endDate: "2026-05-31",
+        costPerDay: 500,
+        calendarDays: 31
       }
     ]);
   });
+
+  it("applies a day-1 event to the whole month", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: [{ effectiveDate: "2026-05-01", costPerDay: 700 }]
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2026-05-01",
+        endDate: "2026-05-31",
+        costPerDay: 700,
+        calendarDays: 31
+      }
+    ]);
+  });
+
+  it("creates a single-day tail slice for last-day event", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: [{ effectiveDate: "2026-05-31", costPerDay: 700 }]
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2026-05-01",
+        endDate: "2026-05-30",
+        costPerDay: 500,
+        calendarDays: 30
+      },
+      {
+        startDate: "2026-05-31",
+        endDate: "2026-05-31",
+        costPerDay: 700,
+        calendarDays: 1
+      }
+    ]);
+  });
+
+  it("sorts unsorted events before slicing", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: [
+        { effectiveDate: "2026-05-20", costPerDay: 800 },
+        { effectiveDate: "2026-05-10", costPerDay: 600 }
+      ]
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2026-05-01",
+        endDate: "2026-05-09",
+        costPerDay: 500,
+        calendarDays: 9
+      },
+      {
+        startDate: "2026-05-10",
+        endDate: "2026-05-19",
+        costPerDay: 600,
+        calendarDays: 10
+      },
+      {
+        startDate: "2026-05-20",
+        endDate: "2026-05-31",
+        costPerDay: 800,
+        calendarDays: 12
+      }
+    ]);
+  });
+
+  it("uses the later input event when two events share the same day", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: [
+        { effectiveDate: "2026-05-16", costPerDay: 700 },
+        { effectiveDate: "2026-05-16", costPerDay: 750 }
+      ]
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2026-05-01",
+        endDate: "2026-05-15",
+        costPerDay: 500,
+        calendarDays: 15
+      },
+      {
+        startDate: "2026-05-16",
+        endDate: "2026-05-31",
+        costPerDay: 750,
+        calendarDays: 16
+      }
+    ]);
+  });
+
+  it("rejects invalid effectiveDate format", () => {
+    expect(() =>
+      sliceMonthByEvents({
+        yearMonth: "2026-05",
+        startingCostPerDay: 500,
+        events: [{ effectiveDate: "2026-5-16", costPerDay: 700 }]
+      })
+    ).toThrow("effectiveDate must match YYYY-MM-DD");
+  });
+
+  it("rejects impossible effectiveDate values", () => {
+    expect(() =>
+      sliceMonthByEvents({
+        yearMonth: "2026-02",
+        startingCostPerDay: 500,
+        events: [{ effectiveDate: "2026-02-30", costPerDay: 700 }]
+      })
+    ).toThrow("effectiveDate must be a real calendar date");
+  });
+
+  it("rejects malformed yearMonth values", () => {
+    expect(() =>
+      sliceMonthByEvents({
+        yearMonth: "2026/05",
+        startingCostPerDay: 500,
+        events: []
+      })
+    ).toThrow("yearMonth must match YYYY-MM");
+  });
+
+  it("handles leap-year February correctly", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2024-02",
+      startingCostPerDay: 500,
+      events: [{ effectiveDate: "2024-02-29", costPerDay: 700 }]
+    });
+
+    expect(result).toEqual([
+      {
+        startDate: "2024-02-01",
+        endDate: "2024-02-28",
+        costPerDay: 500,
+        calendarDays: 28
+      },
+      {
+        startDate: "2024-02-29",
+        endDate: "2024-02-29",
+        costPerDay: 700,
+        calendarDays: 1
+      }
+    ]);
+  });
+
+  it("rejects events that fall outside the target month", () => {
+    expect(() =>
+      sliceMonthByEvents({
+        yearMonth: "2026-05",
+        startingCostPerDay: 500,
+        events: [{ effectiveDate: "2026-06-01", costPerDay: 700 }]
+      })
+    ).toThrow("effectiveDate must fall within target yearMonth");
+  });
+
+  it("produces contiguous coverage without gaps or overlaps", () => {
+    const result = sliceMonthByEvents({
+      yearMonth: "2026-05",
+      startingCostPerDay: 500,
+      events: [
+        { effectiveDate: "2026-05-20", costPerDay: 800 },
+        { effectiveDate: "2026-05-10", costPerDay: 600 },
+        { effectiveDate: "2026-05-10", costPerDay: 650 }
+      ]
+    });
+
+    expectContiguousCoverage(result, "2026-05");
+  });
 });
+
+interface SliceLike {
+  startDate: string;
+  endDate: string;
+  calendarDays: number;
+}
+
+function expectContiguousCoverage(slices: SliceLike[], yearMonth: string): void {
+  expect(slices.length).toBeGreaterThan(0);
+  expect(slices[0].startDate).toBe(`${yearMonth}-01`);
+
+  const expectedLastDay = daysInMonth(yearMonth);
+  expect(slices[slices.length - 1].endDate).toBe(`${yearMonth}-${to2Digits(expectedLastDay)}`);
+
+  for (let index = 1; index < slices.length; index += 1) {
+    const prevEnd = getDay(slices[index - 1].endDate);
+    const nextStart = getDay(slices[index].startDate);
+    expect(nextStart).toBe(prevEnd + 1);
+  }
+
+  const coveredDays = slices.reduce((sum, slice) => sum + slice.calendarDays, 0);
+  expect(coveredDays).toBe(expectedLastDay);
+}
+
+function daysInMonth(yearMonth: string): number {
+  const [year, month] = yearMonth.split("-").map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function getDay(date: string): number {
+  return Number(date.slice(8, 10));
+}
+
+function to2Digits(day: number): string {
+  return day.toString().padStart(2, "0");
+}
