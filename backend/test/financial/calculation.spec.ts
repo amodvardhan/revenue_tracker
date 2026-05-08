@@ -1,4 +1,5 @@
 import { buildMonthInput } from "../../src/modules/financial/domain/buildMonthInput";
+import { calculateMonthlyFact } from "../../src/modules/financial/domain/calculation";
 import { sliceMonthByEvents } from "../../src/modules/financial/domain/slicing";
 
 describe("buildMonthInput domain contract", () => {
@@ -317,3 +318,41 @@ function getDay(date: string): number {
 function to2Digits(day: number): string {
   return day.toString().padStart(2, "0");
 }
+
+describe("calculateMonthlyFact domain contract", () => {
+  it("computes planned/actual margin and variance", () => {
+    const result = calculateMonthlyFact({
+      expectedDays: 10,
+      actualDays: 12,
+      extraDays: 2,
+      billRate: 1000,
+      extraDayRate: 1200,
+      costPerDay: 600
+    });
+
+    expect(result.status).toBe("final");
+    expect(result.plannedRevenue).toBe(10000);
+    expect(result.plannedCost).toBe(6000);
+    expect(result.actualRevenue).toBe(12400);
+    expect(result.actualCost).toBe(7200);
+    expect(result.plannedMargin).toBe(4000);
+    expect(result.actualMargin).toBe(5200);
+    expect(result.marginVariance).toBe(1200);
+  });
+
+  it("uses base rate when extra-day rate missing and marks provisional", () => {
+    const result = calculateMonthlyFact({
+      expectedDays: 10,
+      actualDays: 12,
+      extraDays: 2,
+      billRate: 1000,
+      costPerDay: 600
+    });
+
+    expect(result.status).toBe("provisional");
+    expect(result.actualRevenue).toBe(12000);
+    expect(result.plannedMargin).toBe(4000);
+    expect(result.actualMargin).toBe(4800);
+    expect(result.marginVariance).toBe(800);
+  });
+});
