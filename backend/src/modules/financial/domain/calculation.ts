@@ -2,11 +2,13 @@ import { resolveMonthlyFactStatus, type MonthlyFactStatus } from "./status";
 
 export interface CalculateMonthlyFactInput {
   expectedDays: number;
-  actualDays: number;
-  extraDays: number;
-  billRate?: number;
-  extraDayRate?: number;
-  costPerDay?: number;
+  plannedBillRate: number;
+  plannedCostPerDay: number;
+  actualRegularDays: number;
+  actualExtraDays: number;
+  billRate: number | null;
+  extraDayRate: number | null;
+  costPerDay: number | null;
 }
 
 export interface MonthlyFactResult {
@@ -37,13 +39,12 @@ export function calculateMonthlyFact(input: CalculateMonthlyFactInput): MonthlyF
 
   const billRate = input.billRate as number;
   const costPerDay = input.costPerDay as number;
-  const effectiveExtraDayRate = input.extraDayRate ?? billRate;
-  const regularActualDays = input.actualDays - input.extraDays;
 
-  const plannedRevenue = input.expectedDays * billRate;
-  const plannedCost = input.expectedDays * costPerDay;
-  const actualRevenue = regularActualDays * billRate + input.extraDays * effectiveExtraDayRate;
-  const actualCost = input.actualDays * costPerDay;
+  const plannedRevenue = input.expectedDays * input.plannedBillRate;
+  const plannedCost = input.expectedDays * input.plannedCostPerDay;
+  const actualRevenue =
+    input.actualRegularDays * billRate + input.actualExtraDays * (input.extraDayRate ?? billRate);
+  const actualCost = (input.actualRegularDays + input.actualExtraDays) * costPerDay;
 
   const plannedMargin = plannedRevenue - plannedCost;
   const actualMargin = actualRevenue - actualCost;

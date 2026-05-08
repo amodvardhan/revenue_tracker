@@ -323,36 +323,41 @@ describe("calculateMonthlyFact domain contract", () => {
   it("computes planned/actual margin and variance", () => {
     const result = calculateMonthlyFact({
       expectedDays: 10,
-      actualDays: 12,
-      extraDays: 2,
+      plannedBillRate: 1000,
+      plannedCostPerDay: 500,
+      actualRegularDays: 8,
+      actualExtraDays: 2,
       billRate: 1000,
       extraDayRate: 1200,
-      costPerDay: 600
+      costPerDay: 500
     });
 
     expect(result.status).toBe("final");
     expect(result.plannedRevenue).toBe(10000);
-    expect(result.plannedCost).toBe(6000);
-    expect(result.actualRevenue).toBe(12400);
-    expect(result.actualCost).toBe(7200);
-    expect(result.plannedMargin).toBe(4000);
-    expect(result.actualMargin).toBe(5200);
-    expect(result.marginVariance).toBe(1200);
+    expect(result.plannedCost).toBe(5000);
+    expect(result.actualRevenue).toBe(10400);
+    expect(result.actualCost).toBe(5000);
+    expect(result.plannedMargin).toBe(5000);
+    expect(result.actualMargin).toBe(5400);
+    expect(result.marginVariance).toBe(400);
   });
 
   it("uses base rate when extra-day rate missing and marks provisional", () => {
     const result = calculateMonthlyFact({
       expectedDays: 10,
-      actualDays: 12,
-      extraDays: 2,
+      plannedBillRate: 1000,
+      plannedCostPerDay: 500,
+      actualRegularDays: 8,
+      actualExtraDays: 2,
       billRate: 1000,
-      costPerDay: 600
+      extraDayRate: null,
+      costPerDay: 500
     });
 
     expect(result.status).toBe("provisional");
-    expect(result.actualRevenue).toBe(12000);
-    expect(result.plannedMargin).toBe(4000);
-    expect(result.actualMargin).toBe(4800);
-    expect(result.marginVariance).toBe(800);
+    expect(result.actualRevenue).toBe(10000);
+    expect(result.plannedMargin).toBe(5000);
+    expect(result.actualMargin).toBe(5000);
+    expect(result.marginVariance).toBe(0);
   });
 });

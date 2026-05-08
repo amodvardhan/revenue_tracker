@@ -1,9 +1,9 @@
 export type MonthlyFactStatus = "blocked" | "provisional" | "final";
 
 interface ResolveMonthlyFactStatusParams {
-  billRate?: number;
-  costPerDay?: number;
-  extraDayRate?: number;
+  billRate: number | null;
+  costPerDay: number | null;
+  extraDayRate: number | null;
 }
 
 export function resolveMonthlyFactStatus(params: ResolveMonthlyFactStatusParams): MonthlyFactStatus {
