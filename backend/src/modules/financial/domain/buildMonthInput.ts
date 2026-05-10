@@ -1,11 +1,10 @@
 import type { BuildMonthInputParams, MonthInput } from "./types";
 
-const FIXED_BASELINE_DAYS = 20;
 const YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function buildMonthInput(params: BuildMonthInputParams): MonthInput {
-  if (params.baselineDays !== FIXED_BASELINE_DAYS) {
-    throw new Error("baselineDays must be fixed at 20");
+  if (params.baselineDays < 1 || params.baselineDays > 31) {
+    throw new Error("baselineDays must be between 1 and 31");
   }
 
   if (params.allocationPercent < 0 || params.allocationPercent > 100) {
@@ -18,6 +17,6 @@ export function buildMonthInput(params: BuildMonthInputParams): MonthInput {
 
   return {
     computeKey: `${params.employeeId}|${params.projectId}|${params.yearMonth}`,
-    expectedDays: (FIXED_BASELINE_DAYS * params.allocationPercent) / 100
+    expectedDays: (params.baselineDays * params.allocationPercent) / 100
   };
 }

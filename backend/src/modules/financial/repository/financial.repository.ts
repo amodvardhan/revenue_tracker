@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { MonthlyFactStatus, PrismaClient } from "@prisma/client";
 
+import { isMonthInRange } from "../service/monthly-facts.helpers";
+
 export const PRISMA_CLIENT = Symbol("PRISMA_CLIENT");
 
 export interface ReconciliationFactRow {
@@ -35,12 +37,37 @@ export class FinancialRepository {
   }): Promise<string> {
     const computeKey = this.buildComputeKey(input.employeeId, input.projectId, input.month);
 
+    const assignments = await this.prismaClient.assignment.findMany({
+      where: {
+        employeeId: input.employeeId,
+        projectId: input.projectId
+      }
+    });
+
+    const assignment = assignments.find((row) =>
+      isMonthInRange(input.month, row.signedStartDate, row.signedEndDate)
+    );
+
+    if (!assignment) {
+      throw new Error(
+        `No assignment covers ${input.month} for employee ${input.employeeId} on project ${input.projectId}`
+      );
+    }
+
     await this.prismaClient.monthlyFact.upsert({
-      where: { computeKey },
+      where: {
+        employeeId_projectId_month: {
+          employeeId: input.employeeId,
+          projectId: input.projectId,
+          month: input.month
+        }
+      },
       update: {
-        status: MonthlyFactStatus.final
+        status: MonthlyFactStatus.final,
+        assignmentId: assignment.id
       },
       create: {
+        assignmentId: assignment.id,
         employeeId: input.employeeId,
         projectId: input.projectId,
         month: input.month,

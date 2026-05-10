@@ -52,16 +52,16 @@ describe("buildMonthInput domain contract", () => {
     ).toThrow("yearMonth must match YYYY-MM");
   });
 
-  it("throws when baselineDays drifts from fixed 20-day contract", () => {
+  it("throws when baselineDays is out of range", () => {
     expect(() =>
       buildMonthInput({
         employeeId: "emp-1",
         projectId: "prj-1",
         yearMonth: "2026-05",
-        baselineDays: 21,
+        baselineDays: 32,
         allocationPercent: 50
       })
-    ).toThrow("baselineDays must be fixed at 20");
+    ).toThrow("baselineDays must be between 1 and 31");
   });
 });
 

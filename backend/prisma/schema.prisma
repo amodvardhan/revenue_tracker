@@ -13,12 +13,28 @@ enum MonthlyFactStatus {
   final
 }
 
+enum UserRole {
+  delivery_manager
+  account_manager
+  project_manager
+  delivery_head
+}
+
+enum ProjectionStatus {
+  projected
+  converted
+}
+
 model MonthlyFact {
   id             String   @id @default(cuid())
+  assignmentId   String   @map("assignment_id")
   employeeId     String   @map("employee_id")
   projectId      String   @map("project_id")
   month          String
   computeKey     String   @unique @map("compute_key")
+  signedRevenue  Float    @default(0) @map("signed_revenue")
+  projectedRevenue Float  @default(0) @map("projected_revenue")
+  totalRevenue   Float    @default(0) @map("total_revenue")
   expectedDays   Float    @default(0) @map("expected_days")
   plannedRevenue Float    @default(0) @map("planned_revenue")
   plannedCost    Float    @default(0) @map("planned_cost")
@@ -31,6 +47,134 @@ model MonthlyFact {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
   @@unique([employeeId, projectId, month], map: "monthly_facts_employee_project_month_key")
   @@map("monthly_facts")
+}
+
+model AppSettings {
+  id                  String   @id
+  defaultCurrencyCode String   @default("EUR") @map("default_currency_code")
+  defaultRevenueDays  Float    @default(20) @map("default_revenue_days")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  rateRevisionsAuthored RateRevision[]
+  projectionsConverted  Projection[] @relation("projection_converter")
+  alerts                Alert[]
+
+  @@map("users")
+}
+
+model Project {
+  id         String   @id @default(cuid())
+  projectName String  @unique @map("project_name")
+  clientName String   @map("client_name")
+  account    String
+  startDate  DateTime? @map("start_date")
+  endDate    DateTime? @map("end_date")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  assignments Assignment[]
+
+  @@map("projects")
+}
+
+model Assignment {
+  id                String   @id @default(cuid())
+  projectId         String   @map("project_id")
+  employeeId        String   @map("employee_id")
+  teamMemberName    String   @map("team_member_name")
+  allocationPercent Float    @map("allocation_percent")
+  dailyRate         Float    @map("daily_rate")
+  signedStartDate   DateTime @map("signed_start_date")
+  signedEndDate     DateTime @map("signed_end_date")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attendances   Attendance[]
+  rateRevisions RateRevision[]
+  projections   Projection[]
+  monthlyFacts  MonthlyFact[]
+
+  @@index([projectId])
+  @@map("assignments")
+}
+
+model Attendance {
+  id           String   @id @default(cuid())
+  assignmentId String   @map("assignment_id")
+  month        String
+  actualDays   Float    @map("actual_days")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, month], map: "attendance_assignment_month_key")
+  @@map("attendance")
+}
+
+model RateRevision {
+  id            String   @id @default(cuid())
+  assignmentId  String   @map("assignment_id")
+  effectiveDate DateTime @map("effective_date")
+  oldRate       Float    @map("old_rate")
+  newRate       Float    @map("new_rate")
+  authorizerId  String   @map("authorizer_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  authorizer User       @relation(fields: [authorizerId], references: [id], onDelete: Restrict)
+
+  @@index([assignmentId, effectiveDate])
+  @@map("rate_revisions")
+}
+
+model Projection {
+  id               String           @id @default(cuid())
+  assignmentId     String           @map("assignment_id")
+  startDate        DateTime         @map("start_date")
+  endDate          DateTime         @map("end_date")
+  projectionRate   Float            @map("projection_rate")
+  status           ProjectionStatus @default(projected)
+  convertedAt      DateTime?        @map("converted_at")
+  convertedByUserId String?         @map("converted_by_user_id")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  convertedBy User?     @relation("projection_converter", fields: [convertedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([assignmentId])
+  @@map("projections")
+}
+
+model Alert {
+  id             String   @id @default(cuid())
+  account        String
+  alertType      String   @map("alert_type")
+  message        String
+  isActive       Boolean  @default(true) @map("is_active")
+  triggeredAt    DateTime @default(now()) @map("triggered_at")
+  triggeredById  String?  @map("triggered_by_id")
+
+  triggeredBy User? @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  @@index([account, isActive])
+  @@map("alerts")
 }

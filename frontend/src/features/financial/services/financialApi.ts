@@ -19,10 +19,11 @@ export class FinancialApiError extends Error {
 }
 
 export async function getFinancialFacts(): Promise<MonthlyFinancialFact[]> {
+  const apiUrl = resolveFinancialFactsUrl();
   let response: Response;
 
   try {
-    response = await fetch("/api/financial/facts");
+    response = await fetch(apiUrl);
   } catch (error) {
     throw toNetworkError(error);
   }
@@ -43,6 +44,15 @@ export async function getFinancialFacts(): Promise<MonthlyFinancialFact[]> {
   }
 
   return validateFinancialFactsPayload(payload);
+}
+
+function resolveFinancialFactsUrl(): string {
+  const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  if (!baseUrl) {
+    return "/api/financial/facts";
+  }
+
+  return `${baseUrl}/api/financial/facts`;
 }
 
 function toNetworkError(error: unknown): FinancialApiError {
@@ -76,7 +86,18 @@ function validateFinancialFact(item: unknown): MonthlyFinancialFact {
   if (
     typeof candidate.computeKey !== "string" ||
     typeof candidate.month !== "string" ||
+    typeof candidate.employeeId !== "string" ||
+    typeof candidate.projectId !== "string" ||
+    typeof candidate.projectName !== "string" ||
+    typeof candidate.account !== "string" ||
+    typeof candidate.clientName !== "string" ||
+    typeof candidate.teamMemberName !== "string" ||
     !isValidStatus ||
+    typeof candidate.signedRevenue !== "number" ||
+    typeof candidate.projectedRevenue !== "number" ||
+    typeof candidate.totalRevenue !== "number" ||
+    typeof candidate.actualCost !== "number" ||
+    typeof candidate.plannedRevenue !== "number" ||
     typeof candidate.plannedMargin !== "number" ||
     typeof candidate.actualMargin !== "number" ||
     typeof candidate.marginVariance !== "number"
@@ -87,7 +108,18 @@ function validateFinancialFact(item: unknown): MonthlyFinancialFact {
   return {
     computeKey: candidate.computeKey,
     month: candidate.month,
+    employeeId: candidate.employeeId,
+    projectId: candidate.projectId,
+    projectName: candidate.projectName,
+    account: candidate.account,
+    clientName: candidate.clientName,
+    teamMemberName: candidate.teamMemberName,
     status,
+    signedRevenue: candidate.signedRevenue,
+    projectedRevenue: candidate.projectedRevenue,
+    totalRevenue: candidate.totalRevenue,
+    actualCost: candidate.actualCost,
+    plannedRevenue: candidate.plannedRevenue,
     plannedMargin: candidate.plannedMargin,
     actualMargin: candidate.actualMargin,
     marginVariance: candidate.marginVariance

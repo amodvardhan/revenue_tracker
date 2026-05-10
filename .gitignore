@@ -1,2 +1,13 @@
 .worktrees/
 backend/node_modules/
+
+# Secrets (keep .env.example tracked)
+.env
+.env.local
+
+# Build output
+dist/
+frontend/dist/
+
+# Dependencies (root-level installs)
+node_modules/

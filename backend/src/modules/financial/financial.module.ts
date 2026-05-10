@@ -1,71 +1,34 @@
-import { Body, Controller, Get, Inject, Module, Post, UsePipes, ValidationPipe } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 
-import { RecomputeDto } from "./dto/recompute.dto";
-import { FinancialRepository, PRISMA_CLIENT } from "./repository/financial.repository";
+import { AuthController } from "./auth.controller";
+import { BootstrapService } from "./bootstrap.service";
+import { DashboardController } from "./dashboard.controller";
+import { FinancialController } from "./financial.controller";
+import { OperationsController } from "./operations.controller";
+import { SettingsController } from "./settings.controller";
 import { PrismaService } from "./repository/prisma.service";
-import { RecomputeService } from "./service/recompute.service";
-
-@Controller("financial")
-class FinancialController {
-  constructor(
-    @Inject(RecomputeService)
-    private readonly recomputeService: RecomputeService
-  ) {}
-
-  @Post("recompute")
-  @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
-  async recompute(@Body() body: RecomputeDto): Promise<{ recomputedKeys: string[] }> {
-    const recomputedKeys = await this.recomputeService.recomputeTarget(body);
-    return { recomputedKeys };
-  }
-
-  @Get("dashboard")
-  async getDashboard(): Promise<{
-    totals: { plannedMargin: number; actualMargin: number; marginVariance: number };
-  }> {
-    return this.recomputeService.getDashboardSummary();
-  }
-
-  @Get("export")
-  async getExport(): Promise<{
-    rows: Array<{
-      employeeId: string;
-      projectId: string;
-      month: string;
-      plannedMargin: number;
-      actualMargin: number;
-      marginVariance: number;
-    }>;
-    totals: { plannedMargin: number; actualMargin: number; marginVariance: number };
-  }> {
-    return this.recomputeService.getExportSnapshot();
-  }
-
-  @Get("facts")
-  async getFacts(): Promise<
-    Array<{
-      computeKey: string;
-      month: string;
-      status: "blocked" | "provisional" | "final";
-      plannedMargin: number;
-      actualMargin: number;
-      marginVariance: number;
-    }>
-  > {
-    return this.recomputeService.getFinancialFacts();
-  }
-}
+import { JwtGuard } from "./security/jwt.guard";
+import { RolesGuard } from "./security/roles.guard";
+import { AuthSessionService } from "./service/auth-session.service";
+import { MonthlyFactsRecomputeService } from "./service/monthly-facts-recompute.service";
+import { RevenueManagementService } from "./service/revenue-management.service";
 
 @Module({
-  controllers: [FinancialController],
+  controllers: [
+    FinancialController,
+    AuthController,
+    OperationsController,
+    DashboardController,
+    SettingsController
+  ],
   providers: [
     PrismaService,
-    FinancialRepository,
-    RecomputeService,
-    {
-      provide: PRISMA_CLIENT,
-      useExisting: PrismaService
-    }
+    AuthSessionService,
+    MonthlyFactsRecomputeService,
+    RevenueManagementService,
+    BootstrapService,
+    JwtGuard,
+    RolesGuard
   ]
 })
 export class FinancialModule {}

@@ -4,5 +4,6 @@ module.exports = {
   clearMocks: true,
   testEnvironment: "node",
   roots: ["<rootDir>/test"],
-  testMatch: ["**/*.spec.ts", "**/*.e2e-spec.ts"]
+  testMatch: ["**/*.spec.ts", "**/*.e2e-spec.ts"],
+  globalSetup: "<rootDir>/test/global-setup.cjs"
 };
