@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Box, Paper, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
+import { useFormatMoney } from "../../../app/AppSettingsContext";
 import type { MonthlyFinancialFact } from "../../financial/models/financial";
 import {
   aggregateProjectMarginVariance,
@@ -11,18 +12,13 @@ import {
 
 const MOVER_LIMIT = 5;
 
-function formatAmount(value: number): string {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
-
 interface DashboardProjectMoversProps {
   facts: MonthlyFinancialFact[];
 }
 
 export function DashboardProjectMovers({ facts }: DashboardProjectMoversProps): JSX.Element | null {
+  const { formatSigned } = useFormatMoney();
+
   const { gainers, losers } = useMemo(() => {
     const rows = aggregateProjectMarginVariance(facts);
     return {
@@ -57,6 +53,7 @@ export function DashboardProjectMovers({ facts }: DashboardProjectMoversProps): 
           rows={gainers}
           variant="gain"
           emptyHint="No projects are ahead of plan on margin variance in this view."
+          formatVariance={formatSigned}
         />
         <MoverColumn
           title="Top losers"
@@ -64,6 +61,7 @@ export function DashboardProjectMovers({ facts }: DashboardProjectMoversProps): 
           rows={losers}
           variant="loss"
           emptyHint="No projects are behind plan on margin variance in this view."
+          formatVariance={formatSigned}
         />
       </Box>
     </Box>
@@ -76,9 +74,10 @@ interface MoverColumnProps {
   rows: Array<{ id: string; label: string; marginVarianceTotal: number }>;
   variant: "gain" | "loss";
   emptyHint: string;
+  formatVariance: (value: number) => string;
 }
 
-function MoverColumn({ title, subtitle, rows, variant, emptyHint }: MoverColumnProps): JSX.Element {
+function MoverColumn({ title, subtitle, rows, variant, emptyHint, formatVariance }: MoverColumnProps): JSX.Element {
   const accent =
     variant === "gain" ? { bg: alpha("#34c759", 0.08), bar: "#34c759" } : { bg: alpha("#ff3b30", 0.07), bar: "#ff3b30" };
 
@@ -131,8 +130,7 @@ function MoverColumn({ title, subtitle, rows, variant, emptyHint }: MoverColumnP
                   fontVariantNumeric: "tabular-nums"
                 }}
               >
-                {row.marginVarianceTotal >= 0 ? "+" : ""}
-                {formatAmount(row.marginVarianceTotal)}
+                {formatVariance(row.marginVarianceTotal)}
               </Typography>
             </Box>
           ))}

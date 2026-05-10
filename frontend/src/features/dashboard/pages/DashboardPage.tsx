@@ -72,6 +72,7 @@ export function DashboardPage(): JSX.Element {
   return (
     <Box component="section">
       <PageHeader
+        eyebrow="Portfolio overview"
         title="Dashboard"
         description="Portfolio totals, executive charts, then monthly rows by project and team member. Search narrows every section consistently."
       />

@@ -2,6 +2,9 @@ import React from "react";
 import { Box, Paper, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
+import { useFormatMoney } from "../../../app/AppSettingsContext";
+import { surfaceRadiusPx } from "../../../app/theme";
+
 interface DashboardTotals {
   totalRevenue: number;
   signedRevenue: number;
@@ -15,14 +18,9 @@ interface DashboardSummaryCardsProps {
   totals: DashboardTotals;
 }
 
-function formatAmount(value: number): string {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
-
 export function DashboardSummaryCards({ totals }: DashboardSummaryCardsProps): JSX.Element {
+  const { formatAmount } = useFormatMoney();
+
   const cards = [
     { label: "Total Revenue", value: totals.totalRevenue },
     { label: "Signed Revenue", value: totals.signedRevenue },
@@ -52,7 +50,7 @@ export function DashboardSummaryCards({ totals }: DashboardSummaryCardsProps): J
           elevation={0}
           sx={{
             p: 2.5,
-            borderRadius: "14px",
+            borderRadius: `${surfaceRadiusPx}px`,
             transition: "transform 0.2s ease, box-shadow 0.2s ease",
             "&:hover": {
               transform: "translateY(-1px)",

@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AppSettingsProvider } from "../../../app/AppSettingsContext";
 import type { AppSession } from "../../../app/session";
 import { DashboardPage } from "./DashboardPage";
 import { FinancialApiError, getFinancialFacts } from "../../financial/services/financialApi";
@@ -20,6 +21,17 @@ vi.mock("../../../app/SessionContext", () => ({
     logout: vi.fn().mockResolvedValue(undefined)
   })
 }));
+
+vi.mock("../../app/services/appApi", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../../app/services/appApi")>();
+  return {
+    ...mod,
+    getAppSettings: vi.fn().mockResolvedValue({
+      defaultCurrencyCode: "EUR",
+      defaultRevenueDays: 20
+    })
+  };
+});
 
 vi.mock("../../financial/services/financialApi", () => ({
   FinancialApiError: class FinancialApiError extends Error {
@@ -51,7 +63,11 @@ afterEach(() => {
 
 function renderDashboard(ui: React.ReactElement): ReturnType<typeof render> {
   return render(ui, {
-    wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter>
+    wrapper: ({ children }) => (
+      <MemoryRouter>
+        <AppSettingsProvider>{children}</AppSettingsProvider>
+      </MemoryRouter>
+    )
   });
 }
 
@@ -103,7 +119,7 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Final")).toBeInTheDocument();
     expect(screen.getAllByText("Total Revenue").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("+200.00").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("+€200.00").length).toBeGreaterThan(0);
     expect(screen.getByText("Project movers")).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-project-movers")).toContainHTML("Alpha");
     expect(

@@ -260,6 +260,7 @@ export function AttendancePage(): JSX.Element {
     <>
       <Stack spacing={3}>
         <PageHeader
+          eyebrow="Operations"
           title="Attendance"
           description="Choose a project, then review saved entries or add a month. Saving the same assignment + month again updates the row—that’s how you edit."
         />

@@ -262,6 +262,7 @@ export function RevenuePage(): JSX.Element {
     <>
       <Stack spacing={2}>
         <PageHeader
+          eyebrow="Finance"
           title="Revenue"
           description="Recompute engine results from IDs you already use elsewhere—pick projects from the list instead of hunting UUIDs."
         />

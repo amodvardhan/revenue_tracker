@@ -10,7 +10,9 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Stack,
   Toolbar,
+  Tooltip,
   Typography
 } from "@mui/material";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
@@ -21,9 +23,10 @@ import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import { alpha } from "@mui/material/styles";
 import { Link as RouterLink, Outlet, useLocation } from "react-router-dom";
 
+import { RevenueTrackerMark } from "../../app/branding/RevenueTrackerMark";
 import { useSession } from "../../app/SessionContext";
 
-const drawerWidth = 268;
+const drawerWidth = 288;
 
 const primaryNavItems = [
   { to: "/dashboard", label: "Dashboard", Icon: DashboardRoundedIcon },
@@ -53,60 +56,63 @@ export function MainLayout(): JSX.Element {
         elevation={0}
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          bgcolor: alpha("#ffffff", 0.72),
-          backdropFilter: "saturate(180%) blur(20px)",
-          WebkitBackdropFilter: "saturate(180%) blur(20px)",
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          color: "text.primary"
+          bgcolor: alpha("#ffffff", 0.78),
+          backdropFilter: "saturate(180%) blur(22px)",
+          WebkitBackdropFilter: "saturate(180%) blur(22px)",
+          borderBottom: "none",
+          color: "text.primary",
+          boxShadow: "none"
         }}
       >
-        <Toolbar sx={{ minHeight: { xs: 56, sm: 52 }, px: { xs: 2, sm: 3 } }}>
-          <Typography
-            variant="h6"
-            sx={{
-              flexGrow: 1,
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              fontSize: "1.0625rem"
-            }}
-          >
-            Revenue Tracker
-          </Typography>
+        <Toolbar
+          sx={{
+            minHeight: { xs: 56, sm: 54 },
+            px: { xs: 2, sm: 3 },
+            justifyContent: "flex-end",
+            gap: 1
+          }}
+        >
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
               gap: 1.5,
-              mr: 1,
+              mr: 0.5,
               minWidth: 0
             }}
           >
             <Avatar
-              sx={{
-                width: 32,
-                height: 32,
+              sx={(theme) => ({
+                width: 34,
+                height: 34,
                 fontSize: "0.8125rem",
                 fontWeight: 600,
-                bgcolor: alpha("#0071e3", 0.12),
-                color: "primary.main"
-              }}
+                bgcolor: alpha(theme.palette.primary.main, 0.12),
+                color: "primary.main",
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`
+              })}
             >
               {session?.role?.charAt(0).toUpperCase() ?? "?"}
             </Avatar>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{
-                display: { xs: "none", sm: "block" },
-                maxWidth: 200,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap"
-              }}
-            >
-              {roleLabel}
-            </Typography>
+            {roleLabel ? (
+              <Tooltip title={roleLabel} enterDelay={400} placement="bottom">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    display: { xs: "none", sm: "block" },
+                    maxWidth: 220,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    cursor: "default",
+                    fontWeight: 500
+                  }}
+                >
+                  {roleLabel}
+                </Typography>
+              </Tooltip>
+            ) : null}
           </Box>
           <Button color="inherit" variant="text" onClick={() => void logout()} sx={{ fontWeight: 600 }}>
             Sign out
@@ -124,29 +130,55 @@ export function MainLayout(): JSX.Element {
             boxSizing: "border-box",
             borderRight: "1px solid",
             borderColor: "divider",
-            bgcolor: alpha("#fafafa", 0.98),
-            pt: 1
+            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.94),
+            pt: 0,
+            backgroundImage: (theme) =>
+              `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, transparent 28%)`
           }
         }}
       >
         <Toolbar />
-        <Box sx={{ px: 1.5, pb: 2, pt: 0.5 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              px: 2,
-              py: 1,
-              display: "block",
-              color: "text.secondary",
-              letterSpacing: "0.06em",
-              fontWeight: 600,
-              fontSize: "0.6875rem",
-              textTransform: "uppercase"
-            }}
-          >
-            Overview
+        <Box sx={{ px: 2.5, pt: 1.5, pb: 2.5, borderBottom: "1px solid", borderColor: "divider" }}>
+          <Stack direction="row" spacing={1.75} alignItems="center">
+            <Box
+              sx={(theme) => ({
+                width: 40,
+                height: 40,
+                borderRadius: "11px",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: alpha(theme.palette.background.paper, 0.65),
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                boxShadow: `0 6px 18px ${alpha(theme.palette.common.black, 0.07)}`
+              })}
+            >
+              <RevenueTrackerMark size={30} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 600,
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.25
+                }}
+              >
+                Revenue Tracker
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, letterSpacing: "-0.01em" }}>
+                Portfolio clarity
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
+
+        <Box component="nav" aria-label="Main navigation" sx={{ px: 1.5, pb: 2, pt: 2 }}>
+          <Typography variant="overline" sx={{ px: 2, py: 0.5, display: "block" }}>
+            Navigate
           </Typography>
-          <List dense disablePadding sx={{ mt: 0.5 }}>
+          <List dense disablePadding sx={{ mt: 1 }}>
             {navItems.map(({ to, label, Icon }) => {
               const selected = location.pathname === to;
               return (
@@ -155,20 +187,45 @@ export function MainLayout(): JSX.Element {
                   component={RouterLink}
                   to={to}
                   selected={selected}
-                  sx={{
-                    mb: 0.25,
+                  sx={(theme) => ({
+                    mb: 0.35,
                     mx: 0.5,
                     borderRadius: 2,
-                    py: 1.25,
+                    py: 1.35,
+                    pl: 2,
+                    position: "relative",
+                    overflow: "hidden",
                     "&.Mui-selected": {
-                      bgcolor: alpha("#0071e3", 0.1),
+                      bgcolor: alpha(theme.palette.primary.main, 0.09),
                       "&:hover": {
-                        bgcolor: alpha("#0071e3", 0.14)
+                        bgcolor: alpha(theme.palette.primary.main, 0.12)
                       }
-                    }
-                  }}
+                    },
+                    ...(selected
+                      ? {
+                          "&::before": {
+                            content: '""',
+                            position: "absolute",
+                            left: 8,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: 3,
+                            height: 22,
+                            borderRadius: 1,
+                            bgcolor: "primary.main"
+                          }
+                        }
+                      : {})
+                  })}
                 >
-                  <ListItemIcon sx={{ minWidth: 40, color: selected ? "primary.main" : "text.secondary" }}>
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 42,
+                      pl: selected ? 0.75 : 0,
+                      color: selected ? "primary.main" : "text.secondary",
+                      transition: "color 0.15s ease"
+                    }}
+                  >
                     <Icon fontSize="small" />
                   </ListItemIcon>
                   <ListItemText
@@ -196,10 +253,10 @@ export function MainLayout(): JSX.Element {
         sx={{
           flexGrow: 1,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: { xs: 7, sm: 6.5 },
-          px: { xs: 2, sm: 3, md: 4 },
-          pb: 6,
-          maxWidth: 1200,
+          mt: { xs: 7, sm: 6.75 },
+          px: { xs: 2, sm: 3, md: 5 },
+          pb: { xs: 5, md: 8 },
+          maxWidth: 1240,
           mx: "auto"
         }}
       >

@@ -12,6 +12,7 @@ import {
   Typography
 } from "@mui/material";
 
+import { useAppSettings } from "../../../app/AppSettingsContext";
 import { PageHeader } from "../../../app/PageHeader";
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import { useSession } from "../../../app/SessionContext";
@@ -25,6 +26,7 @@ function normalizeCurrencyInput(raw: string): string {
 type ConfigurationTab = "defaults" | "organization";
 
 export function ConfigurationPage(): JSX.Element {
+  const { refresh: refreshAppSettings } = useAppSettings();
   const { session } = useSession();
   const { notifySuccess, notifyError, FeedbackSnackbar } = usePageFeedback();
   const [searchParams] = useSearchParams();
@@ -86,6 +88,7 @@ export function ConfigurationPage(): JSX.Element {
       });
       setDefaultCurrencyCode(updated.defaultCurrencyCode);
       setDefaultRevenueDays(updated.defaultRevenueDays);
+      await refreshAppSettings();
       notifySuccess("Configuration saved.");
     } catch (err) {
       notifyError(err);
@@ -97,6 +100,7 @@ export function ConfigurationPage(): JSX.Element {
   return (
     <Box component="section">
       <PageHeader
+        eyebrow="Organization"
         title="Configuration"
         description={
           canEdit

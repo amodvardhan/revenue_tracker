@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import { Box, Paper, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import {
@@ -17,6 +17,8 @@ import {
   YAxis
 } from "recharts";
 
+import { useFormatMoney } from "../../../app/AppSettingsContext";
+import { surfaceRadiusPx } from "../../../app/theme";
 import type { MonthlyFinancialFact } from "../../financial/models/financial";
 import {
   aggregateByProject,
@@ -25,27 +27,26 @@ import {
   projectTotalsAsPieSlices
 } from "../utils/dashboardAggregates";
 
-function formatAxisAmount(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (abs >= 1000) {
-    return `${(value / 1000).toFixed(1)}k`;
-  }
-  return value.toFixed(0);
-}
-
-function formatTooltipAmount(value: number): string {
-  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 interface DashboardExecutiveChartsProps {
   facts: MonthlyFinancialFact[];
 }
 
 export function DashboardExecutiveCharts({ facts }: DashboardExecutiveChartsProps): JSX.Element {
   const theme = useTheme();
+  const { formatAmount, formatCompact } = useFormatMoney();
+
+  const formatAxisAmount = useCallback(
+    (value: number) => {
+      const abs = Math.abs(value);
+      if (abs >= 1000) {
+        return formatCompact(value);
+      }
+      return formatAmount(value);
+    },
+    [formatAmount, formatCompact]
+  );
+
+  const formatTooltipAmount = useCallback((value: number) => formatAmount(value), [formatAmount]);
 
   const palette = useMemo(() => {
     const accent = theme.palette.secondary?.main ?? "#9c27b0";
@@ -66,7 +67,7 @@ export function DashboardExecutiveCharts({ facts }: DashboardExecutiveChartsProp
 
   const chartPaperSx = {
     p: { xs: 2, sm: 2.5 },
-    borderRadius: "14px",
+    borderRadius: `${surfaceRadiusPx}px`,
     border: "1px solid",
     borderColor: "divider",
     bgcolor: alpha(theme.palette.background.paper, 1)

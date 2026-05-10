@@ -12,6 +12,8 @@ import {
   Typography
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
+import { useFormatMoney } from "../../../app/AppSettingsContext";
+import { surfaceRadiusPx } from "../../../app/theme";
 import { friendlyError } from "../../../lib/friendlyError";
 import type { MonthlyFinancialFact, MonthlyFactStatus } from "../models/financial";
 import type { FinancialApiError } from "../services/financialApi";
@@ -20,14 +22,6 @@ interface FinancialGridProps {
   facts: MonthlyFinancialFact[];
   isLoading: boolean;
   error: FinancialApiError | null;
-}
-
-function formatVariance(value: number): string {
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
-}
-
-function formatAmount(value: number): string {
-  return value.toFixed(2);
 }
 
 function formatStatus(status: MonthlyFactStatus): string {
@@ -43,6 +37,8 @@ function formatStatus(status: MonthlyFactStatus): string {
 }
 
 export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): JSX.Element {
+  const { formatAmount, formatSigned } = useFormatMoney();
+
   if (isLoading) {
     return (
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 6, justifyContent: "center" }}>
@@ -83,7 +79,7 @@ export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): 
       component={Paper}
       elevation={0}
       sx={{
-        borderRadius: "14px",
+        borderRadius: `${surfaceRadiusPx}px`,
         overflow: "hidden",
         "& .MuiTableCell-root": {
           borderColor: "divider"
@@ -150,10 +146,10 @@ export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): 
                     color: leakage < 0 ? "error.main" : "success.main"
                   }}
                 >
-                  {formatVariance(leakage)}
+                  {formatSigned(leakage)}
                 </TableCell>
                 <TableCell>{formatStatus(fact.status)}</TableCell>
-                <TableCell align="right">{formatVariance(fact.marginVariance)}</TableCell>
+                <TableCell align="right">{formatSigned(fact.marginVariance)}</TableCell>
               </TableRow>
             );
           })}

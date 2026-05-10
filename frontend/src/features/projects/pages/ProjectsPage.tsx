@@ -35,6 +35,7 @@ import { alpha } from "@mui/material/styles";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { Link as RouterLink } from "react-router-dom";
 
+import { useFormatMoney } from "../../../app/AppSettingsContext";
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import {
   bulkUploadAssignments,
@@ -90,6 +91,7 @@ function formatAssignmentContractWindow(assignment: AssignmentRow): string {
 }
 
 export function ProjectsPage(): JSX.Element {
+  const { formatAmountFlexible } = useFormatMoney();
   const { notifySuccess, notifyError, notifyRawError, FeedbackSnackbar } = usePageFeedback();
   const [tab, setTab] = useState<ProjectTab>("create");
 
@@ -371,6 +373,7 @@ export function ProjectsPage(): JSX.Element {
     <>
       <Stack spacing={3}>
         <PageHeader
+          eyebrow="Delivery"
           title="Projects"
           description="Create a contract under an account (from your Organization catalog), then add people and rates—or bulk-upload from Excel."
         />
@@ -829,12 +832,7 @@ export function ProjectsPage(): JSX.Element {
                             <TableCell sx={{ fontWeight: 600 }}>{assignment.teamMemberName}</TableCell>
                             <TableCell>{assignment.employeeId}</TableCell>
                             <TableCell align="right">{assignment.allocationPercent}%</TableCell>
-                            <TableCell align="right">
-                              {assignment.dailyRate.toLocaleString(undefined, {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 2
-                              })}
-                            </TableCell>
+                            <TableCell align="right">{formatAmountFlexible(assignment.dailyRate)}</TableCell>
                             <TableCell sx={{ whiteSpace: "nowrap", fontSize: "0.8125rem" }}>
                               {formatAssignmentContractWindow(assignment)}
                             </TableCell>
