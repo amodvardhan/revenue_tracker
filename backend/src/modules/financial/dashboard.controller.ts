@@ -31,7 +31,7 @@ export class DashboardController {
   }
 
   @Post("reports/export")
-  async exportReport(@Body() body: { account?: string; projectId?: string }) {
+  async exportReport(@Body() body: { accountId?: string; projectId?: string }) {
     return this.revenueManagementService.exportReport(body);
   }
 

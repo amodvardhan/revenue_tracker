@@ -122,8 +122,13 @@ export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): 
                   <Typography variant="body2" noWrap title={fact.projectName}>
                     {fact.projectName}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap title={fact.account}>
-                    {fact.account}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    noWrap
+                    title={[fact.account, fact.businessUnitCode].filter(Boolean).join(" · ")}
+                  >
+                    {[fact.account, fact.businessUnitCode].filter(Boolean).join(" · ")}
                   </Typography>
                 </TableCell>
                 <TableCell sx={{ maxWidth: 180 }}>

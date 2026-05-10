@@ -17,7 +17,7 @@ export class OperationsController {
   @Post("projects")
   @Roles(UserRole.delivery_manager, UserRole.account_manager, UserRole.project_manager)
   async createProject(
-    @Body() body: { projectName: string; clientName: string; account: string; startDate?: string; endDate?: string }
+    @Body() body: { projectName: string; clientName: string; accountId: string; startDate?: string; endDate?: string }
   ) {
     return this.revenueManagementService.createProject(body);
   }
@@ -39,7 +39,7 @@ export class OperationsController {
   async updateProject(
     @Param("projectId") projectId: string,
     @Body()
-    body: Partial<{ projectName: string; clientName: string; account: string; startDate: string; endDate: string }>
+    body: Partial<{ projectName: string; clientName: string; accountId: string; startDate: string; endDate: string }>
   ) {
     return this.revenueManagementService.updateProject(projectId, body);
   }

@@ -7,6 +7,9 @@ export interface MonthlyFinancialFact {
   projectId: string;
   projectName: string;
   account: string;
+  accountDisplayName?: string;
+  businessUnitCode?: string;
+  businessUnitName?: string;
   clientName: string;
   teamMemberName: string;
   status: MonthlyFactStatus;

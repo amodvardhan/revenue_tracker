@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
   CircularProgress,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography
 } from "@mui/material";
@@ -12,23 +15,34 @@ import {
 import { PageHeader } from "../../../app/PageHeader";
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import { useSession } from "../../../app/SessionContext";
+import { OrganizationSettingsPanel } from "../components/OrganizationSettingsPanel";
 import { getAppSettings, updateAppSettings } from "../../app/services/appApi";
 
 function normalizeCurrencyInput(raw: string): string {
   return raw.trim().toUpperCase().slice(0, 3);
 }
 
+type ConfigurationTab = "defaults" | "organization";
+
 export function ConfigurationPage(): JSX.Element {
   const { session } = useSession();
   const { notifySuccess, notifyError, FeedbackSnackbar } = usePageFeedback();
+  const [searchParams] = useSearchParams();
 
   const canEdit =
     session?.role === "delivery_manager" || session?.role === "account_manager";
 
+  const [configTab, setConfigTab] = useState<ConfigurationTab>("defaults");
   const [defaultCurrencyCode, setDefaultCurrencyCode] = useState("EUR");
   const [defaultRevenueDays, setDefaultRevenueDays] = useState(20);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("section") === "organization") {
+      setConfigTab("organization");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,16 +100,28 @@ export function ConfigurationPage(): JSX.Element {
         title="Configuration"
         description={
           canEdit
-            ? "Set the default reporting currency and the baseline working days per month used for revenue expectations and attendance."
-            : "Current organization defaults for currency and revenue baseline days."
+            ? "Reporting defaults, business units, and accounts (with delivery and account managers)."
+            : "View organization settings. Editing is limited to delivery and account managers."
         }
       />
+
+      <Paper elevation={0} sx={{ mb: 2 }}>
+        <Tabs
+          value={configTab}
+          onChange={(_, v: ConfigurationTab) => setConfigTab(v)}
+          variant="fullWidth"
+          sx={{ minHeight: 48, "& .MuiTab-root": { textTransform: "none", fontWeight: 600 } }}
+        >
+          <Tab value="defaults" label="Reporting defaults" />
+          <Tab value="organization" label="Organization" />
+        </Tabs>
+      </Paper>
 
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
           <CircularProgress size={36} />
         </Box>
-      ) : (
+      ) : configTab === "defaults" ? (
         <Paper
           elevation={0}
           sx={{
@@ -138,6 +164,8 @@ export function ConfigurationPage(): JSX.Element {
             )}
           </Stack>
         </Paper>
+      ) : (
+        <OrganizationSettingsPanel canEdit={canEdit} notifySuccess={notifySuccess} notifyError={notifyError} />
       )}
       {FeedbackSnackbar}
     </Box>

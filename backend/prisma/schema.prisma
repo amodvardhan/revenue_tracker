@@ -75,22 +75,57 @@ model User {
   rateRevisionsAuthored RateRevision[]
   projectionsConverted  Projection[] @relation("projection_converter")
   alerts                Alert[]
+  deliveryManagedAccounts Account[] @relation("AccountDeliveryManager")
+  accountManagedAccounts  Account[] @relation("AccountAccountManager")
 
   @@map("users")
+}
+
+model BusinessUnit {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  accounts Account[]
+
+  @@map("business_units")
+}
+
+model Account {
+  id                    String   @id @default(cuid())
+  code                  String   @unique
+  displayName           String   @map("display_name")
+  businessUnitId        String   @map("business_unit_id")
+  deliveryManagerUserId String   @map("delivery_manager_user_id")
+  accountManagerUserId  String   @map("account_manager_user_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  businessUnit    BusinessUnit @relation(fields: [businessUnitId], references: [id], onDelete: Restrict)
+  deliveryManager User         @relation("AccountDeliveryManager", fields: [deliveryManagerUserId], references: [id], onDelete: Restrict)
+  accountManager  User         @relation("AccountAccountManager", fields: [accountManagerUserId], references: [id], onDelete: Restrict)
+  projects        Project[]
+  alerts          Alert[]
+
+  @@map("accounts")
 }
 
 model Project {
   id         String   @id @default(cuid())
   projectName String  @unique @map("project_name")
   clientName String   @map("client_name")
-  account    String
+  accountId  String   @map("account_id")
   startDate  DateTime? @map("start_date")
   endDate    DateTime? @map("end_date")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
   assignments Assignment[]
 
+  @@index([accountId])
   @@map("projects")
 }
 
@@ -166,15 +201,16 @@ model Projection {
 
 model Alert {
   id             String   @id @default(cuid())
-  account        String
+  accountId      String   @map("account_id")
   alertType      String   @map("alert_type")
   message        String
   isActive       Boolean  @default(true) @map("is_active")
   triggeredAt    DateTime @default(now()) @map("triggered_at")
   triggeredById  String?  @map("triggered_by_id")
 
-  triggeredBy User? @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  account     Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  triggeredBy User?   @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
 
-  @@index([account, isActive])
+  @@index([accountId, isActive])
   @@map("alerts")
 }

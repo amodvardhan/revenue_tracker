@@ -5,6 +5,7 @@ import { BootstrapService } from "./bootstrap.service";
 import { DashboardController } from "./dashboard.controller";
 import { FinancialController } from "./financial.controller";
 import { OperationsController } from "./operations.controller";
+import { OrganizationController } from "./organization.controller";
 import { SettingsController } from "./settings.controller";
 import { PrismaService } from "./repository/prisma.service";
 import { JwtGuard } from "./security/jwt.guard";
@@ -18,6 +19,7 @@ import { RevenueManagementService } from "./service/revenue-management.service";
     FinancialController,
     AuthController,
     OperationsController,
+    OrganizationController,
     DashboardController,
     SettingsController
   ],

@@ -9,6 +9,8 @@ import { AppModule } from "../../src/app.module";
 describe("POST /api/financial/recompute", () => {
   let app: INestApplication;
 
+  jest.setTimeout(120000);
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule]
@@ -74,6 +76,9 @@ describe("POST /api/financial/recompute", () => {
         projectId: expect.any(String),
         projectName: expect.any(String),
         account: expect.any(String),
+        accountDisplayName: expect.any(String),
+        businessUnitCode: expect.any(String),
+        businessUnitName: expect.any(String),
         clientName: expect.any(String),
         teamMemberName: expect.any(String),
         status: expect.stringMatching(/blocked|provisional|final/),

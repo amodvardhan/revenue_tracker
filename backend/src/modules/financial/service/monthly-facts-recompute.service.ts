@@ -105,28 +105,31 @@ export class MonthlyFactsRecomputeService {
       });
     }
 
-    await this.refreshAlertsForAccount(assignment.project.account);
+    await this.refreshAlertsForAccount(assignment.project.accountId);
   }
 
-  private async refreshAlertsForAccount(account: string): Promise<void> {
+  private async refreshAlertsForAccount(accountId: string): Promise<void> {
     const facts = await this.prisma.monthlyFact.findMany({
-      where: { assignment: { project: { account } } }
+      where: { assignment: { project: { accountId } } }
     });
     const planned = facts.reduce((acc, row) => acc + row.plannedRevenue, 0);
     const leakage = facts.reduce((acc, row) => acc + (row.plannedRevenue - row.actualCost), 0);
     const leakagePercent = planned <= 0 ? 0 : (leakage / planned) * 100;
 
     await this.prisma.alert.updateMany({
-      where: { account, alertType: "leakage_threshold" },
+      where: { accountId, alertType: "leakage_threshold" },
       data: { isActive: false }
     });
+
+    const account = await this.prisma.account.findUnique({ where: { id: accountId }, select: { code: true } });
+    const label = account?.code ?? accountId;
 
     if (leakagePercent > 10) {
       await this.prisma.alert.create({
         data: {
-          account,
+          accountId,
           alertType: "leakage_threshold",
-          message: `Revenue leakage is ${leakagePercent.toFixed(2)}% for account ${account}`
+          message: `Revenue leakage is ${leakagePercent.toFixed(2)}% for account ${label}`
         }
       });
     }

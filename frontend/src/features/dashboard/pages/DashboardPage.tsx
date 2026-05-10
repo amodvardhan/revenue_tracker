@@ -24,7 +24,23 @@ export function DashboardPage(): JSX.Element {
     if (!normalized) {
       return facts;
     }
-    return facts.filter((fact) => fact.computeKey.toLowerCase().includes(normalized));
+    return facts.filter((fact) => {
+      const haystack = [
+        fact.computeKey,
+        fact.projectName,
+        fact.clientName,
+        fact.account,
+        fact.accountDisplayName,
+        fact.businessUnitCode,
+        fact.businessUnitName,
+        fact.teamMemberName,
+        fact.employeeId
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalized);
+    });
   }, [facts, accountFilter]);
 
   const totals = useMemo(() => {

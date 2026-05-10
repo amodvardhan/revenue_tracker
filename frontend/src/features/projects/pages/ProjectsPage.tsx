@@ -30,16 +30,20 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import Link from "@mui/material/Link";
 import { alpha } from "@mui/material/styles";
 import type { SelectChangeEvent } from "@mui/material/Select";
+import { Link as RouterLink } from "react-router-dom";
 
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import {
   bulkUploadAssignments,
   createAssignment,
   createProject,
+  listAccounts,
   listAssignments,
   listProjects,
+  type AccountRow,
   type AssignmentRow,
   type BulkAssignmentRow,
   type ProjectRow
@@ -90,10 +94,11 @@ export function ProjectsPage(): JSX.Element {
   const [tab, setTab] = useState<ProjectTab>("create");
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
 
   const [projectName, setProjectName] = useState("");
   const [clientName, setClientName] = useState("");
-  const [account, setAccount] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [projectErrors, setProjectErrors] = useState<Partial<Record<string, string>>>({});
@@ -117,9 +122,19 @@ export function ProjectsPage(): JSX.Element {
     }
   }, [notifyError]);
 
+  const loadAccounts = useCallback(async () => {
+    try {
+      const rows = await listAccounts();
+      setAccounts(rows);
+    } catch (err) {
+      notifyError(err);
+    }
+  }, [notifyError]);
+
   useEffect(() => {
     void loadProjects();
-  }, [loadProjects]);
+    void loadAccounts();
+  }, [loadProjects, loadAccounts]);
 
   useEffect(() => {
     if (!assignmentProjectId) {
@@ -152,8 +167,8 @@ export function ProjectsPage(): JSX.Element {
     if (!clientName.trim()) {
       next.clientName = "Client name is required.";
     }
-    if (!account.trim()) {
-      next.account = "Account or billing code is required.";
+    if (!accountId.trim()) {
+      next.accountId = "Choose the commercial account this project belongs to.";
     }
     if (startDate && endDate && startDate > endDate) {
       next.dates = "End date must be on or after start date.";
@@ -171,14 +186,14 @@ export function ProjectsPage(): JSX.Element {
       await createProject({
         projectName: projectName.trim(),
         clientName: clientName.trim(),
-        account: account.trim(),
+        accountId: accountId.trim(),
         startDate: startDate || undefined,
         endDate: endDate || undefined
       });
       notifySuccess("Project created.");
       setProjectName("");
       setClientName("");
-      setAccount("");
+      setAccountId("");
       setStartDate("");
       setEndDate("");
       setProjectErrors({});
@@ -357,7 +372,7 @@ export function ProjectsPage(): JSX.Element {
       <Stack spacing={3}>
         <PageHeader
           title="Projects"
-          description="Start a contract, attach people and rates, then optionally bulk-upload a roster from Excel."
+          description="Create a contract under an account (from your Organization catalog), then add people and rates—or bulk-upload from Excel."
         />
 
         <Paper elevation={0} sx={{ px: 2, pt: 2 }}>
@@ -409,18 +424,50 @@ export function ProjectsPage(): JSX.Element {
                   helperText={projectErrors.clientName ?? "Legal or commercial client label."}
                   sx={{ flex: "1 1 200px" }}
                 />
-                <TextField
-                  label="Account"
-                  value={account}
-                  onChange={(event) => {
-                    setAccount(event.target.value);
-                    setProjectErrors((e) => ({ ...e, account: undefined }));
-                  }}
+                <FormControl
                   required
-                  error={Boolean(projectErrors.account)}
-                  helperText={projectErrors.account ?? "Billing or CRM account reference."}
-                  sx={{ flex: "1 1 160px" }}
-                />
+                  error={Boolean(projectErrors.accountId)}
+                  sx={{ flex: "1 1 220px", minWidth: 200 }}
+                >
+                  <InputLabel id="project-account-label">Account</InputLabel>
+                  <Select
+                    labelId="project-account-label"
+                    label="Account"
+                    value={accountId}
+                    onChange={(event: SelectChangeEvent<string>) => {
+                      setAccountId(event.target.value);
+                      setProjectErrors((e) => ({ ...e, accountId: undefined }));
+                    }}
+                  >
+                    {accounts.length === 0 ? (
+                      <MenuItem value="" disabled>
+                        No accounts yet — use Organization settings (Configuration) to add a unit and accounts
+                      </MenuItem>
+                    ) : null}
+                    {accounts.map((row) => (
+                      <MenuItem key={row.id} value={row.id}>
+                        {row.code} — {row.displayName} ({row.businessUnit.code})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText component="div">
+                    {projectErrors.accountId ? (
+                      projectErrors.accountId
+                    ) : (
+                      <>
+                        Pick the commercial account for this contract (business unit + owners).{" "}
+                        <Link
+                          component={RouterLink}
+                          to="/configuration?section=organization"
+                          underline="hover"
+                          sx={{ fontWeight: 600 }}
+                        >
+                          Organization settings
+                        </Link>
+                      </>
+                    )}
+                  </FormHelperText>
+                </FormControl>
                 <TextField
                   label="Start"
                   type="date"
@@ -578,6 +625,15 @@ export function ProjectsPage(): JSX.Element {
                           </Typography>
                           <Stack direction="row" sx={{ mt: 1.25, flexWrap: "wrap", gap: 0.75 }}>
                             <Chip label={project.account} size="small" variant="outlined" sx={{ fontWeight: 500 }} />
+                            {project.businessUnitCode ? (
+                              <Chip
+                                label={project.businessUnitCode}
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                sx={{ fontWeight: 500 }}
+                              />
+                            ) : null}
                             {rangeLabel ? (
                               <Chip label={rangeLabel} size="small" sx={{ fontWeight: 500, maxWidth: "100%" }} />
                             ) : (

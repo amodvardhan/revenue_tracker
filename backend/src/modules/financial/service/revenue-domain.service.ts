@@ -1,9 +1,15 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { MonthlyFactStatus, ProjectionStatus, UserRole } from "@prisma/client";
+import { MonthlyFactStatus, Prisma, ProjectionStatus, UserRole } from "@prisma/client";
 
 import { PrismaService } from "../repository/prisma.service";
 import { AuthSessionService } from "./auth-session.service";
 import { MonthlyFactsRecomputeService } from "./monthly-facts-recompute.service";
+
+const projectWithAccountInclude = {
+  account: { include: { businessUnit: true } }
+} satisfies Prisma.ProjectInclude;
+
+type ProjectWithAccount = Prisma.ProjectGetPayload<{ include: typeof projectWithAccountInclude }>;
 
 @Injectable()
 export class RevenueDomainService {
@@ -12,6 +18,23 @@ export class RevenueDomainService {
     @Inject(AuthSessionService) protected readonly authSession: AuthSessionService,
     @Inject(MonthlyFactsRecomputeService) protected readonly monthlyFactsRecompute: MonthlyFactsRecomputeService
   ) {}
+
+  private serializeProject(row: ProjectWithAccount) {
+    return {
+      id: row.id,
+      projectName: row.projectName,
+      clientName: row.clientName,
+      accountId: row.accountId,
+      account: row.account.code,
+      accountDisplayName: row.account.displayName,
+      businessUnitCode: row.account.businessUnit.code,
+      businessUnitName: row.account.businessUnit.name,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt
+    };
+  }
 
   async login(email: string, password: string): Promise<{ token: string; role: UserRole; userId: string }> {
     return this.authSession.login(email, password);
@@ -91,46 +114,70 @@ export class RevenueDomainService {
   async createProject(input: {
     projectName: string;
     clientName: string;
-    account: string;
+    accountId: string;
     startDate?: string;
     endDate?: string;
   }) {
-    return this.prisma.project.create({
+    const row = await this.prisma.project.create({
       data: {
         projectName: input.projectName,
         clientName: input.clientName,
-        account: input.account,
+        accountId: input.accountId,
         startDate: input.startDate ? new Date(input.startDate) : null,
         endDate: input.endDate ? new Date(input.endDate) : null
-      }
+      },
+      include: projectWithAccountInclude
     });
+    return this.serializeProject(row);
   }
 
   async listProjects() {
-    return this.prisma.project.findMany({ orderBy: { projectName: "asc" } });
+    const rows = await this.prisma.project.findMany({
+      orderBy: { projectName: "asc" },
+      include: projectWithAccountInclude
+    });
+    return rows.map((row) => this.serializeProject(row));
   }
 
   async getProject(projectId: string) {
     return this.prisma.project.findUniqueOrThrow({
       where: { id: projectId },
-      include: { assignments: true }
+      include: { assignments: true, ...projectWithAccountInclude }
     });
   }
 
   async updateProject(
     projectId: string,
-    input: Partial<{ projectName: string; clientName: string; account: string; startDate: string; endDate: string }>
+    input: Partial<{
+      projectName: string;
+      clientName: string;
+      accountId: string;
+      startDate: string;
+      endDate: string;
+    }>
   ) {
-    return this.prisma.project.update({
+    const data: Prisma.ProjectUpdateInput = {};
+    if (input.projectName !== undefined) {
+      data.projectName = input.projectName;
+    }
+    if (input.clientName !== undefined) {
+      data.clientName = input.clientName;
+    }
+    if (input.accountId !== undefined) {
+      data.account = { connect: { id: input.accountId } };
+    }
+    if (input.startDate !== undefined) {
+      data.startDate = input.startDate ? new Date(input.startDate) : null;
+    }
+    if (input.endDate !== undefined) {
+      data.endDate = input.endDate ? new Date(input.endDate) : null;
+    }
+    const row = await this.prisma.project.update({
       where: { id: projectId },
-      data: {
-        projectName: input.projectName,
-        clientName: input.clientName,
-        account: input.account,
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined
-      }
+      data,
+      include: projectWithAccountInclude
     });
+    return this.serializeProject(row);
   }
 
   async addAssignment(
@@ -384,9 +431,9 @@ export class RevenueDomainService {
     return updatedProjection;
   }
 
-  async getDashboardByAccount(account: string) {
+  async getDashboardByAccount(accountId: string) {
     const facts = await this.prisma.monthlyFact.findMany({
-      where: { assignment: { project: { account } } },
+      where: { assignment: { project: { accountId } } },
       orderBy: [{ month: "asc" }]
     });
     return this.buildDashboardResponse(facts);
@@ -408,12 +455,12 @@ export class RevenueDomainService {
     return this.buildDashboardResponse(facts);
   }
 
-  async exportReport(input: { account?: string; projectId?: string }) {
+  async exportReport(input: { accountId?: string; projectId?: string }) {
     if (input.projectId) {
       return this.getDashboardByProject(input.projectId);
     }
-    if (input.account) {
-      return this.getDashboardByAccount(input.account);
+    if (input.accountId) {
+      return this.getDashboardByAccount(input.accountId);
     }
     const facts = await this.prisma.monthlyFact.findMany({ orderBy: [{ month: "asc" }] });
     return this.buildDashboardResponse(facts);
@@ -422,7 +469,10 @@ export class RevenueDomainService {
   async listAlerts() {
     return this.prisma.alert.findMany({
       where: { isActive: true },
-      orderBy: { triggeredAt: "desc" }
+      orderBy: { triggeredAt: "desc" },
+      include: {
+        account: { select: { code: true, displayName: true } }
+      }
     });
   }
 
@@ -435,8 +485,14 @@ export class RevenueDomainService {
             project: {
               select: {
                 projectName: true,
-                account: true,
-                clientName: true
+                clientName: true,
+                account: {
+                  select: {
+                    code: true,
+                    displayName: true,
+                    businessUnit: { select: { code: true, name: true } }
+                  }
+                }
               }
             }
           }
@@ -451,7 +507,10 @@ export class RevenueDomainService {
       employeeId: row.employeeId,
       projectId: row.projectId,
       projectName: row.assignment.project.projectName,
-      account: row.assignment.project.account,
+      account: row.assignment.project.account.code,
+      accountDisplayName: row.assignment.project.account.displayName,
+      businessUnitCode: row.assignment.project.account.businessUnit.code,
+      businessUnitName: row.assignment.project.account.businessUnit.name,
       clientName: row.assignment.project.clientName,
       teamMemberName: row.assignment.teamMemberName,
       status: row.status,
@@ -477,9 +536,245 @@ export class RevenueDomainService {
     return [`${input.employeeId}|${input.projectId}|${input.month}`];
   }
 
+  async listUsersForOrgDirectory() {
+    return this.prisma.user.findMany({
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: [{ name: "asc" }]
+    });
+  }
+
+  async listBusinessUnits() {
+    return this.prisma.businessUnit.findMany({ orderBy: { code: "asc" } });
+  }
+
+  async createBusinessUnit(input: { code: string; name: string }) {
+    const code = input.code.trim().toUpperCase();
+    if (!/^[A-Z0-9_]{2,24}$/.test(code)) {
+      throw new BadRequestException("Business unit code must be 2-24 letters, digits, or underscores");
+    }
+    const name = input.name.trim();
+    if (!name) {
+      throw new BadRequestException("Business unit name is required");
+    }
+    return this.prisma.businessUnit.create({
+      data: { code, name }
+    });
+  }
+
+  async listAccountsDetailed() {
+    return this.prisma.account.findMany({
+      orderBy: { code: "asc" },
+      include: {
+        businessUnit: { select: { id: true, code: true, name: true } },
+        deliveryManager: { select: { id: true, name: true, email: true } },
+        accountManager: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  private async assertAccountManagerPair(deliveryManagerUserId: string, accountManagerUserId: string) {
+    const [dm, am] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: deliveryManagerUserId } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: accountManagerUserId } })
+    ]);
+    if (dm.role !== UserRole.delivery_manager && dm.role !== UserRole.delivery_head) {
+      throw new BadRequestException("Delivery owner must be a delivery_manager or delivery_head user");
+    }
+    if (am.role !== UserRole.account_manager) {
+      throw new BadRequestException("Account owner must be an account_manager user");
+    }
+  }
+
+  async createAccountRecord(input: {
+    code: string;
+    displayName: string;
+    businessUnitId: string;
+    deliveryManagerUserId: string;
+    accountManagerUserId: string;
+  }) {
+    await this.assertAccountManagerPair(input.deliveryManagerUserId, input.accountManagerUserId);
+    const code = input.code.trim().toUpperCase().replace(/\s+/g, "_");
+    if (!/^[A-Z0-9_]{2,32}$/.test(code)) {
+      throw new BadRequestException("Account code must be 2-32 letters, digits, or underscores");
+    }
+    const displayName = input.displayName.trim();
+    if (!displayName) {
+      throw new BadRequestException("Account display name is required");
+    }
+    return this.prisma.account.create({
+      data: {
+        code,
+        displayName,
+        businessUnitId: input.businessUnitId,
+        deliveryManagerUserId: input.deliveryManagerUserId,
+        accountManagerUserId: input.accountManagerUserId
+      },
+      include: {
+        businessUnit: { select: { id: true, code: true, name: true } },
+        deliveryManager: { select: { id: true, name: true, email: true } },
+        accountManager: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  async updateAccountRecord(
+    accountId: string,
+    input: Partial<{
+      displayName: string;
+      businessUnitId: string;
+      deliveryManagerUserId: string;
+      accountManagerUserId: string;
+    }>
+  ) {
+    const existing = await this.prisma.account.findUniqueOrThrow({ where: { id: accountId } });
+    const dmId = input.deliveryManagerUserId ?? existing.deliveryManagerUserId;
+    const amId = input.accountManagerUserId ?? existing.accountManagerUserId;
+    if (input.deliveryManagerUserId !== undefined || input.accountManagerUserId !== undefined) {
+      await this.assertAccountManagerPair(dmId, amId);
+    }
+
+    const data: Prisma.AccountUpdateInput = {};
+    if (input.displayName !== undefined) {
+      const displayName = input.displayName.trim();
+      if (!displayName) {
+        throw new BadRequestException("Account display name is required");
+      }
+      data.displayName = displayName;
+    }
+    if (input.businessUnitId !== undefined) {
+      data.businessUnit = { connect: { id: input.businessUnitId } };
+    }
+    if (input.deliveryManagerUserId !== undefined) {
+      data.deliveryManager = { connect: { id: input.deliveryManagerUserId } };
+    }
+    if (input.accountManagerUserId !== undefined) {
+      data.accountManager = { connect: { id: input.accountManagerUserId } };
+    }
+
+    if (Object.keys(data).length === 0) {
+      return this.prisma.account.findUniqueOrThrow({
+        where: { id: accountId },
+        include: {
+          businessUnit: { select: { id: true, code: true, name: true } },
+          deliveryManager: { select: { id: true, name: true, email: true } },
+          accountManager: { select: { id: true, name: true, email: true } }
+        }
+      });
+    }
+
+    return this.prisma.account.update({
+      where: { id: accountId },
+      data,
+      include: {
+        businessUnit: { select: { id: true, code: true, name: true } },
+        deliveryManager: { select: { id: true, name: true, email: true } },
+        accountManager: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  async updateBusinessUnitRecord(businessUnitId: string, input: { name: string }) {
+    const name = input.name.trim();
+    if (!name) {
+      throw new BadRequestException("Business unit name is required");
+    }
+    return this.prisma.businessUnit.update({
+      where: { id: businessUnitId },
+      data: { name }
+    });
+  }
+
+  async deleteBusinessUnitRecord(businessUnitId: string) {
+    const accountCount = await this.prisma.account.count({ where: { businessUnitId } });
+    if (accountCount > 0) {
+      throw new BadRequestException(
+        `This business unit still has ${accountCount} account(s). Delete or move those accounts first.`
+      );
+    }
+    await this.prisma.businessUnit.delete({ where: { id: businessUnitId } });
+    return { deleted: true as const };
+  }
+
+  async deleteAccountRecord(accountId: string) {
+    const projectCount = await this.prisma.project.count({ where: { accountId } });
+    if (projectCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete: ${projectCount} project(s) are still linked to this account. Change the project’s account or remove the project first.`
+      );
+    }
+    await this.prisma.$transaction([
+      this.prisma.alert.deleteMany({ where: { accountId } }),
+      this.prisma.account.delete({ where: { id: accountId } })
+    ]);
+    return { deleted: true as const };
+  }
+
+  async ensureStandardOrganizationAndDemoAccounts(): Promise<void> {
+    await this.prisma.businessUnit.upsert({
+      where: { code: "IO" },
+      create: { id: "phase2bu_io", code: "IO", name: "International Organization" },
+      update: {}
+    });
+    await this.prisma.businessUnit.upsert({
+      where: { code: "GEN" },
+      create: { id: "phase2bu_gen", code: "GEN", name: "General" },
+      update: {}
+    });
+
+    const dm = await this.prisma.user.findFirst({
+      where: { role: { in: [UserRole.delivery_manager, UserRole.delivery_head] } },
+      orderBy: { createdAt: "asc" }
+    });
+    const am = await this.prisma.user.findFirst({
+      where: { role: UserRole.account_manager },
+      orderBy: { createdAt: "asc" }
+    });
+    if (!dm || !am) {
+      return;
+    }
+
+    const buIo = await this.prisma.businessUnit.findUniqueOrThrow({ where: { code: "IO" } });
+    const buGen = await this.prisma.businessUnit.findUniqueOrThrow({ where: { code: "GEN" } });
+
+    const ioAccounts: Array<{ code: string; displayName: string }> = [
+      { code: "WHO", displayName: "World Health Organization" },
+      { code: "IAEA", displayName: "International Atomic Energy Agency" },
+      { code: "OPCW", displayName: "Organisation for the Prohibition of Chemical Weapons" },
+      { code: "OPECFUND", displayName: "OPEC Fund for International Development" },
+      { code: "GCP", displayName: "Green Climate Fund" }
+    ];
+
+    for (const row of ioAccounts) {
+      await this.prisma.account.upsert({
+        where: { code: row.code },
+        create: {
+          code: row.code,
+          displayName: row.displayName,
+          businessUnitId: buIo.id,
+          deliveryManagerUserId: dm.id,
+          accountManagerUserId: am.id
+        },
+        update: {}
+      });
+    }
+
+    await this.prisma.account.upsert({
+      where: { code: "ACME" },
+      create: {
+        code: "ACME",
+        displayName: "Acme Corporation (demo)",
+        businessUnitId: buGen.id,
+        deliveryManagerUserId: dm.id,
+        accountManagerUserId: am.id
+      },
+      update: {}
+    });
+  }
+
   async seedDemoDataIfEmpty() {
     const projectCount = await this.prisma.project.count();
     if (projectCount > 0) {
+      await this.ensureStandardOrganizationAndDemoAccounts();
       return;
     }
 
@@ -519,10 +814,14 @@ export class RevenueDomainService {
       }
     });
 
+    await this.ensureStandardOrganizationAndDemoAccounts();
+
+    const acme = await this.prisma.account.findUniqueOrThrow({ where: { code: "ACME" } });
+
     const project = await this.createProject({
       projectName: "Alpha Revenue Stream",
       clientName: "Acme Corp",
-      account: "ACME",
+      accountId: acme.id,
       startDate: "2026-04-01",
       endDate: "2026-12-31"
     });
@@ -553,7 +852,7 @@ export class RevenueDomainService {
 
     await this.prisma.alert.create({
       data: {
-        account: "ACME",
+        accountId: acme.id,
         alertType: "leakage_threshold",
         message: "Projected leakage exceeded 10% for Alpha Revenue Stream"
       }

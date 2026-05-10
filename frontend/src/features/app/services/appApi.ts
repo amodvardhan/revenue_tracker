@@ -11,7 +11,11 @@ export interface ProjectRow {
   id: string;
   projectName: string;
   clientName: string;
+  accountId: string;
   account: string;
+  accountDisplayName?: string;
+  businessUnitCode?: string;
+  businessUnitName?: string;
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -30,9 +34,56 @@ export interface AssignmentRow {
 export interface CreateProjectPayload {
   projectName: string;
   clientName: string;
-  account: string;
+  accountId: string;
   startDate?: string;
   endDate?: string;
+}
+
+export interface BusinessUnitRow {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface UserDirectoryRow {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface AccountRow {
+  id: string;
+  code: string;
+  displayName: string;
+  businessUnitId: string;
+  businessUnit: { id: string; code: string; name: string };
+  deliveryManager: { id: string; name: string; email: string };
+  accountManager: { id: string; name: string; email: string };
+}
+
+export interface CreateBusinessUnitPayload {
+  code: string;
+  name: string;
+}
+
+export interface CreateAccountPayload {
+  code: string;
+  displayName: string;
+  businessUnitId: string;
+  deliveryManagerUserId: string;
+  accountManagerUserId: string;
+}
+
+export interface UpdateAccountPayload {
+  displayName?: string;
+  businessUnitId?: string;
+  deliveryManagerUserId?: string;
+  accountManagerUserId?: string;
+}
+
+export interface UpdateBusinessUnitPayload {
+  name: string;
 }
 
 export interface CreateAssignmentPayload {
@@ -166,6 +217,61 @@ export async function logout(token: string): Promise<{ success: true }> {
 
 export async function listProjects(): Promise<ProjectRow[]> {
   return requestJson<ProjectRow[]>("/api/projects");
+}
+
+export async function listUsersDirectory(): Promise<UserDirectoryRow[]> {
+  return requestJson<UserDirectoryRow[]>("/api/users/directory");
+}
+
+export async function listBusinessUnits(): Promise<BusinessUnitRow[]> {
+  return requestJson<BusinessUnitRow[]>("/api/business-units");
+}
+
+export async function createBusinessUnit(payload: CreateBusinessUnitPayload): Promise<BusinessUnitRow> {
+  return requestJson<BusinessUnitRow>("/api/business-units", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateBusinessUnit(
+  businessUnitId: string,
+  payload: UpdateBusinessUnitPayload
+): Promise<BusinessUnitRow> {
+  return requestJson<BusinessUnitRow>(`/api/business-units/${businessUnitId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteBusinessUnit(businessUnitId: string): Promise<{ deleted: true }> {
+  return requestJson<{ deleted: true }>(`/api/business-units/${businessUnitId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listAccounts(): Promise<AccountRow[]> {
+  return requestJson<AccountRow[]>("/api/accounts");
+}
+
+export async function createAccount(payload: CreateAccountPayload): Promise<AccountRow> {
+  return requestJson<AccountRow>("/api/accounts", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateAccount(accountId: string, payload: UpdateAccountPayload): Promise<AccountRow> {
+  return requestJson<AccountRow>(`/api/accounts/${accountId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteAccount(accountId: string): Promise<{ deleted: true }> {
+  return requestJson<{ deleted: true }>(`/api/accounts/${accountId}`, {
+    method: "DELETE"
+  });
 }
 
 export async function listAssignments(projectId: string): Promise<AssignmentRow[]> {
