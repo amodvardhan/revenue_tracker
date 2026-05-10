@@ -15,13 +15,19 @@ export class SettingsController {
   ) {}
 
   @Get()
-  @Roles(UserRole.delivery_manager, UserRole.account_manager, UserRole.project_manager, UserRole.delivery_head)
+  @Roles(
+    UserRole.admin,
+    UserRole.delivery_manager,
+    UserRole.account_manager,
+    UserRole.project_manager,
+    UserRole.delivery_head
+  )
   async getSettings() {
     return this.revenueManagementService.getAppSettings();
   }
 
   @Put()
-  @Roles(UserRole.delivery_manager, UserRole.account_manager)
+  @Roles(UserRole.admin, UserRole.delivery_manager, UserRole.account_manager)
   async updateSettings(
     @Body()
     body: {

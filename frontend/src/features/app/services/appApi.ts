@@ -5,6 +5,7 @@ export interface LoginResponse {
   token: string;
   role: string;
   userId: string;
+  name: string;
 }
 
 export interface ProjectRow {
@@ -43,6 +44,7 @@ export interface BusinessUnitRow {
   id: string;
   code: string;
   name: string;
+  deliveryHead: { id: string; name: string; email: string };
 }
 
 export interface UserDirectoryRow {
@@ -65,6 +67,7 @@ export interface AccountRow {
 export interface CreateBusinessUnitPayload {
   code: string;
   name: string;
+  deliveryHeadUserId: string;
 }
 
 export interface CreateAccountPayload {
@@ -83,7 +86,15 @@ export interface UpdateAccountPayload {
 }
 
 export interface UpdateBusinessUnitPayload {
+  name?: string;
+  deliveryHeadUserId?: string;
+}
+
+export interface CreateManagedUserPayload {
+  email: string;
+  password: string;
   name: string;
+  role: "delivery_manager" | "delivery_head" | "account_manager" | "project_manager";
 }
 
 export interface CreateAssignmentPayload {
@@ -221,6 +232,13 @@ export async function listProjects(): Promise<ProjectRow[]> {
 
 export async function listUsersDirectory(): Promise<UserDirectoryRow[]> {
   return requestJson<UserDirectoryRow[]>("/api/users/directory");
+}
+
+export async function createManagedUser(payload: CreateManagedUserPayload): Promise<UserDirectoryRow> {
+  return requestJson<UserDirectoryRow>("/api/users", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function listBusinessUnits(): Promise<BusinessUnitRow[]> {

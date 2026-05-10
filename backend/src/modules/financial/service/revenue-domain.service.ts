@@ -1,4 +1,5 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import type { User } from "@prisma/client";
 import { MonthlyFactStatus, Prisma, ProjectionStatus, UserRole } from "@prisma/client";
 
 import { PrismaService } from "../repository/prisma.service";
@@ -19,6 +20,110 @@ export class RevenueDomainService {
     @Inject(MonthlyFactsRecomputeService) protected readonly monthlyFactsRecompute: MonthlyFactsRecomputeService
   ) {}
 
+  /**
+   * Resolves account IDs visible to the user. `null` means unrestricted (admin, project_manager,
+   * or internal bootstrap when `user` is null). Otherwise returns IDs for scoped roles; empty array means none.
+   */
+  protected async resolveAccessibleAccountIds(user: Pick<User, "id" | "role"> | null): Promise<string[] | null> {
+    if (user === null) return null;
+    // String-based checks: Prisma `UserRole` must match, but avoid edge cases where enum identity fails.
+    const r = String(user.role);
+    if (r === "admin" || r === "project_manager") return null;
+
+    if (r === "delivery_head") {
+      const rows = await this.prisma.account.findMany({
+        where: {
+          OR: [
+            { businessUnit: { deliveryHeadUserId: user.id } },
+            { deliveryManagerUserId: user.id }
+          ]
+        },
+        select: { id: true }
+      });
+      return [...new Set(rows.map((row) => row.id))];
+    }
+
+    if (r === "delivery_manager") {
+      const rows = await this.prisma.account.findMany({
+        where: { deliveryManagerUserId: user.id },
+        select: { id: true }
+      });
+      return rows.map((row) => row.id);
+    }
+
+    if (r === "account_manager") {
+      const rows = await this.prisma.account.findMany({
+        where: { accountManagerUserId: user.id },
+        select: { id: true }
+      });
+      return rows.map((row) => row.id);
+    }
+
+    return [];
+  }
+
+  /** Throws NotFound when missing or out of scope so callers cannot distinguish unauthorized access. */
+  protected async assertAccountInScope(user: Pick<User, "id" | "role"> | null, accountId: string): Promise<void> {
+    if (user === null) return;
+    const ids = await this.resolveAccessibleAccountIds(user);
+    if (ids === null) return;
+    if (!ids.includes(accountId)) {
+      throw new NotFoundException("Account not found");
+    }
+  }
+
+  protected async assertProjectInScope(user: Pick<User, "id" | "role"> | null, projectId: string): Promise<void> {
+    if (user === null) return;
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { accountId: true }
+    });
+    if (!project) {
+      throw new NotFoundException("Project not found");
+    }
+    await this.assertAccountInScope(user, project.accountId);
+  }
+
+  protected async assertAssignmentInScope(
+    user: Pick<User, "id" | "role"> | null,
+    assignmentId: string
+  ): Promise<void> {
+    if (user === null) return;
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      select: { projectId: true }
+    });
+    if (!assignment) {
+      throw new NotFoundException("Assignment not found");
+    }
+    await this.assertProjectInScope(user, assignment.projectId);
+  }
+
+  protected async assertBusinessUnitInScope(
+    user: Pick<User, "id" | "role"> | null,
+    businessUnitId: string
+  ): Promise<void> {
+    if (user === null) return;
+    const role = String(user.role);
+    if (role === "admin" || role === "project_manager") return;
+
+    if (role === "delivery_head") {
+      const bu = await this.prisma.businessUnit.findFirst({
+        where: { id: businessUnitId, deliveryHeadUserId: user.id }
+      });
+      if (!bu) throw new ForbiddenException("Access denied");
+      return;
+    }
+
+    const accountIds = await this.resolveAccessibleAccountIds(user);
+    if (accountIds === null) return;
+    const linked = await this.prisma.account.findFirst({
+      where: { businessUnitId, id: { in: accountIds } },
+      select: { id: true }
+    });
+    if (!linked) throw new ForbiddenException("Access denied");
+  }
+
   private serializeProject(row: ProjectWithAccount) {
     return {
       id: row.id,
@@ -36,7 +141,10 @@ export class RevenueDomainService {
     };
   }
 
-  async login(email: string, password: string): Promise<{ token: string; role: UserRole; userId: string }> {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{ token: string; role: UserRole; userId: string; name: string }> {
     return this.authSession.login(email, password);
   }
 
@@ -111,13 +219,17 @@ export class RevenueDomainService {
     return row?.defaultRevenueDays ?? 20;
   }
 
-  async createProject(input: {
-    projectName: string;
-    clientName: string;
-    accountId: string;
-    startDate?: string;
-    endDate?: string;
-  }) {
+  async createProject(
+    user: Pick<User, "id" | "role"> | null,
+    input: {
+      projectName: string;
+      clientName: string;
+      accountId: string;
+      startDate?: string;
+      endDate?: string;
+    }
+  ) {
+    await this.assertAccountInScope(user, input.accountId);
     const row = await this.prisma.project.create({
       data: {
         projectName: input.projectName,
@@ -131,15 +243,21 @@ export class RevenueDomainService {
     return this.serializeProject(row);
   }
 
-  async listProjects() {
+  async listProjects(user: Pick<User, "id" | "role"> | null) {
+    const ids = await this.resolveAccessibleAccountIds(user);
+    if (ids !== null && ids.length === 0) {
+      return [];
+    }
     const rows = await this.prisma.project.findMany({
+      where: ids === null ? {} : { accountId: { in: ids } },
       orderBy: { projectName: "asc" },
       include: projectWithAccountInclude
     });
     return rows.map((row) => this.serializeProject(row));
   }
 
-  async getProject(projectId: string) {
+  async getProject(user: Pick<User, "id" | "role"> | null, projectId: string) {
+    await this.assertProjectInScope(user, projectId);
     return this.prisma.project.findUniqueOrThrow({
       where: { id: projectId },
       include: { assignments: true, ...projectWithAccountInclude }
@@ -147,6 +265,7 @@ export class RevenueDomainService {
   }
 
   async updateProject(
+    user: Pick<User, "id" | "role"> | null,
     projectId: string,
     input: Partial<{
       projectName: string;
@@ -156,6 +275,10 @@ export class RevenueDomainService {
       endDate: string;
     }>
   ) {
+    await this.assertProjectInScope(user, projectId);
+    if (input.accountId !== undefined) {
+      await this.assertAccountInScope(user, input.accountId);
+    }
     const data: Prisma.ProjectUpdateInput = {};
     if (input.projectName !== undefined) {
       data.projectName = input.projectName;
@@ -181,6 +304,7 @@ export class RevenueDomainService {
   }
 
   async addAssignment(
+    user: Pick<User, "id" | "role"> | null,
     projectId: string,
     input: {
       employeeId: string;
@@ -191,6 +315,7 @@ export class RevenueDomainService {
       signedEndDate: string;
     }
   ) {
+    await this.assertProjectInScope(user, projectId);
     this.validateAssignment(input);
 
     const assignment = await this.prisma.assignment.create({
@@ -210,6 +335,7 @@ export class RevenueDomainService {
   }
 
   async bulkUploadAssignments(
+    user: Pick<User, "id" | "role"> | null,
     projectId: string,
     rows: Array<{
       employeeId: string;
@@ -222,16 +348,18 @@ export class RevenueDomainService {
   ) {
     const created = [];
     for (const row of rows) {
-      created.push(await this.addAssignment(projectId, row));
+      created.push(await this.addAssignment(user, projectId, row));
     }
     return { createdCount: created.length, rows: created };
   }
 
-  async listAssignments(projectId: string) {
+  async listAssignments(user: Pick<User, "id" | "role"> | null, projectId: string) {
+    await this.assertProjectInScope(user, projectId);
     return this.prisma.assignment.findMany({ where: { projectId }, orderBy: { teamMemberName: "asc" } });
   }
 
   async updateAssignment(
+    user: Pick<User, "id" | "role"> | null,
     assignmentId: string,
     input: Partial<{
       teamMemberName: string;
@@ -241,6 +369,7 @@ export class RevenueDomainService {
       signedEndDate: string;
     }>
   ) {
+    await this.assertAssignmentInScope(user, assignmentId);
     if (input.allocationPercent != null && (input.allocationPercent < 0 || input.allocationPercent > 100)) {
       throw new BadRequestException("allocationPercent must be between 0 and 100");
     }
@@ -266,7 +395,12 @@ export class RevenueDomainService {
     return assignment;
   }
 
-  async recordAttendance(projectId: string, input: { assignmentId: string; month: string; actualDays: number }) {
+  async recordAttendance(
+    user: Pick<User, "id" | "role"> | null,
+    projectId: string,
+    input: { assignmentId: string; month: string; actualDays: number }
+  ) {
+    await this.assertProjectInScope(user, projectId);
     const assignment = await this.prisma.assignment.findUniqueOrThrow({ where: { id: input.assignmentId } });
     if (assignment.projectId !== projectId) {
       throw new BadRequestException("assignmentId does not belong to project");
@@ -287,17 +421,19 @@ export class RevenueDomainService {
   }
 
   async bulkUploadAttendance(
+    user: Pick<User, "id" | "role"> | null,
     projectId: string,
     rows: Array<{ assignmentId: string; month: string; actualDays: number }>
   ) {
     const saved = [];
     for (const row of rows) {
-      saved.push(await this.recordAttendance(projectId, row));
+      saved.push(await this.recordAttendance(user, projectId, row));
     }
     return { createdCount: saved.length, rows: saved };
   }
 
-  async listAttendance(projectId: string) {
+  async listAttendance(user: Pick<User, "id" | "role"> | null, projectId: string) {
+    await this.assertProjectInScope(user, projectId);
     return this.prisma.attendance.findMany({
       where: { assignment: { projectId } },
       orderBy: [{ month: "desc" }, { assignmentId: "asc" }],
@@ -309,7 +445,12 @@ export class RevenueDomainService {
     });
   }
 
-  async deleteAttendance(projectId: string, attendanceId: string) {
+  async deleteAttendance(
+    user: Pick<User, "id" | "role"> | null,
+    projectId: string,
+    attendanceId: string
+  ) {
+    await this.assertProjectInScope(user, projectId);
     const row = await this.prisma.attendance.findUnique({
       where: { id: attendanceId },
       include: { assignment: true }
@@ -326,9 +467,11 @@ export class RevenueDomainService {
   }
 
   async createRateRevision(
+    user: Pick<User, "id" | "role"> | null,
     assignmentId: string,
     input: { effectiveDate: string; newRate: number; authorizerId: string }
   ) {
+    await this.assertAssignmentInScope(user, assignmentId);
     const assignment = await this.prisma.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
     if (input.newRate <= 0) {
       throw new BadRequestException("newRate must be > 0");
@@ -354,7 +497,8 @@ export class RevenueDomainService {
     return revision;
   }
 
-  async listRateRevisions(assignmentId: string) {
+  async listRateRevisions(user: Pick<User, "id" | "role"> | null, assignmentId: string) {
+    await this.assertAssignmentInScope(user, assignmentId);
     return this.prisma.rateRevision.findMany({
       where: { assignmentId },
       include: { authorizer: { select: { id: true, name: true, email: true } } },
@@ -363,9 +507,11 @@ export class RevenueDomainService {
   }
 
   async createProjection(
+    user: Pick<User, "id" | "role"> | null,
     assignmentId: string,
     input: { startDate: string; endDate: string; projectionRate: number }
   ) {
+    await this.assertAssignmentInScope(user, assignmentId);
     const assignment = await this.prisma.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
     const signedEnd = assignment.signedEndDate.toISOString().slice(0, 10);
     if (input.startDate <= signedEnd) {
@@ -399,19 +545,28 @@ export class RevenueDomainService {
     return projection;
   }
 
-  async bulkUploadProjections(rows: Array<{ assignmentId: string; startDate: string; endDate: string; projectionRate: number }>) {
+  async bulkUploadProjections(
+    user: Pick<User, "id" | "role"> | null,
+    rows: Array<{ assignmentId: string; startDate: string; endDate: string; projectionRate: number }>
+  ) {
     const created = [];
     for (const row of rows) {
-      created.push(await this.createProjection(row.assignmentId, row));
+      created.push(await this.createProjection(user, row.assignmentId, row));
     }
     return { createdCount: created.length, rows: created };
   }
 
-  async convertProjectionToSigned(projectionId: string, convertedByUserId: string) {
+  async convertProjectionToSigned(
+    user: Pick<User, "id" | "role"> | null,
+    projectionId: string,
+    convertedByUserId: string
+  ) {
     const projection = await this.prisma.projection.findUniqueOrThrow({
       where: { id: projectionId },
       include: { assignment: true }
     });
+
+    await this.assertAssignmentInScope(user, projection.assignmentId);
 
     const updatedProjection = await this.prisma.projection.update({
       where: { id: projectionId },
@@ -431,7 +586,8 @@ export class RevenueDomainService {
     return updatedProjection;
   }
 
-  async getDashboardByAccount(accountId: string) {
+  async getDashboardByAccount(user: Pick<User, "id" | "role"> | null, accountId: string) {
+    await this.assertAccountInScope(user, accountId);
     const facts = await this.prisma.monthlyFact.findMany({
       where: { assignment: { project: { accountId } } },
       orderBy: [{ month: "asc" }]
@@ -439,7 +595,8 @@ export class RevenueDomainService {
     return this.buildDashboardResponse(facts);
   }
 
-  async getDashboardByProject(projectId: string) {
+  async getDashboardByProject(user: Pick<User, "id" | "role"> | null, projectId: string) {
+    await this.assertProjectInScope(user, projectId);
     const facts = await this.prisma.monthlyFact.findMany({
       where: { projectId },
       orderBy: [{ month: "asc" }]
@@ -447,7 +604,8 @@ export class RevenueDomainService {
     return this.buildDashboardResponse(facts);
   }
 
-  async getDashboardByTeamMember(assignmentId: string) {
+  async getDashboardByTeamMember(user: Pick<User, "id" | "role"> | null, assignmentId: string) {
+    await this.assertAssignmentInScope(user, assignmentId);
     const facts = await this.prisma.monthlyFact.findMany({
       where: { assignmentId },
       orderBy: [{ month: "asc" }]
@@ -455,20 +613,35 @@ export class RevenueDomainService {
     return this.buildDashboardResponse(facts);
   }
 
-  async exportReport(input: { accountId?: string; projectId?: string }) {
+  async exportReport(user: Pick<User, "id" | "role"> | null, input: { accountId?: string; projectId?: string }) {
     if (input.projectId) {
-      return this.getDashboardByProject(input.projectId);
+      return this.getDashboardByProject(user, input.projectId);
     }
     if (input.accountId) {
-      return this.getDashboardByAccount(input.accountId);
+      return this.getDashboardByAccount(user, input.accountId);
     }
-    const facts = await this.prisma.monthlyFact.findMany({ orderBy: [{ month: "asc" }] });
+    const ids = await this.resolveAccessibleAccountIds(user);
+    if (ids !== null && ids.length === 0) {
+      return this.buildDashboardResponse([]);
+    }
+    const facts = await this.prisma.monthlyFact.findMany({
+      where:
+        ids === null ? {} : { assignment: { project: { accountId: { in: ids } } } },
+      orderBy: [{ month: "asc" }]
+    });
     return this.buildDashboardResponse(facts);
   }
 
-  async listAlerts() {
+  async listAlerts(user: Pick<User, "id" | "role"> | null) {
+    const ids = await this.resolveAccessibleAccountIds(user);
+    if (ids !== null && ids.length === 0) {
+      return [];
+    }
     return this.prisma.alert.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(ids === null ? {} : { accountId: { in: ids } })
+      },
       orderBy: { triggeredAt: "desc" },
       include: {
         account: { select: { code: true, displayName: true } }
@@ -476,8 +649,13 @@ export class RevenueDomainService {
     });
   }
 
-  async getFinancialFacts() {
+  async getFinancialFacts(user: Pick<User, "id" | "role"> | null) {
+    const ids = await this.resolveAccessibleAccountIds(user);
+    if (ids !== null && ids.length === 0) {
+      return [];
+    }
     const rows = await this.prisma.monthlyFact.findMany({
+      where: ids === null ? {} : { assignment: { project: { accountId: { in: ids } } } },
       include: {
         assignment: {
           select: {
@@ -525,13 +703,14 @@ export class RevenueDomainService {
     }));
   }
 
-  async recomputeTarget(input: { employeeId: string; projectId: string; month: string }) {
+  async recomputeTarget(user: Pick<User, "id" | "role"> | null, input: { employeeId: string; projectId: string; month: string }) {
     const assignment = await this.prisma.assignment.findFirst({
       where: { employeeId: input.employeeId, projectId: input.projectId }
     });
     if (!assignment) {
       throw new BadRequestException("No assignment found for employeeId/projectId");
     }
+    await this.assertAssignmentInScope(user, assignment.id);
     await this.monthlyFactsRecompute.recomputeMonthlyFactsForAssignment(assignment.id);
     return [`${input.employeeId}|${input.projectId}|${input.month}`];
   }
@@ -543,11 +722,96 @@ export class RevenueDomainService {
     });
   }
 
-  async listBusinessUnits() {
-    return this.prisma.businessUnit.findMany({ orderBy: { code: "asc" } });
+  private async assertDeliveryHeadUser(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.role !== UserRole.delivery_head) {
+      throw new BadRequestException("The delivery head must be a user with role delivery_head");
+    }
   }
 
-  async createBusinessUnit(input: { code: string; name: string }) {
+  async createUserByAdmin(input: { email: string; password: string; name: string; role: UserRole }) {
+    const allowed = new Set<UserRole>([
+      UserRole.delivery_manager,
+      UserRole.delivery_head,
+      UserRole.account_manager,
+      UserRole.project_manager
+    ]);
+    if (!allowed.has(input.role)) {
+      throw new BadRequestException(
+        "Role must be delivery_manager, delivery_head, account_manager, or project_manager"
+      );
+    }
+    const email = input.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new BadRequestException("Invalid email address");
+    }
+    const password = input.password;
+    if (password.length < 8) {
+      throw new BadRequestException("Password must be at least 8 characters");
+    }
+    const name = input.name.trim();
+    if (!name) {
+      throw new BadRequestException("Name is required");
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new BadRequestException("A user with this email already exists");
+    }
+
+    return this.prisma.user.create({
+      data: {
+        email,
+        passwordHash: this.authSession.hashPassword(password),
+        name,
+        role: input.role
+      },
+      select: { id: true, name: true, email: true, role: true }
+    });
+  }
+
+  async listBusinessUnits(user: Pick<User, "id" | "role"> | null) {
+    const include = {
+      deliveryHead: { select: { id: true, name: true, email: true } }
+    };
+    if (user === null) {
+      return this.prisma.businessUnit.findMany({
+        orderBy: { code: "asc" },
+        include
+      });
+    }
+    const role = String(user.role);
+    if (role === "admin" || role === "project_manager") {
+      return this.prisma.businessUnit.findMany({
+        orderBy: { code: "asc" },
+        include
+      });
+    }
+    if (role === "delivery_head") {
+      return this.prisma.businessUnit.findMany({
+        where: {
+          OR: [
+            { deliveryHeadUserId: user.id },
+            { accounts: { some: { deliveryManagerUserId: user.id } } }
+          ]
+        },
+        orderBy: { code: "asc" },
+        include
+      });
+    }
+    const accountIds = await this.resolveAccessibleAccountIds(user);
+    if (!accountIds || accountIds.length === 0) {
+      return [];
+    }
+    return this.prisma.businessUnit.findMany({
+      where: { accounts: { some: { id: { in: accountIds } } } },
+      orderBy: { code: "asc" },
+      include
+    });
+  }
+
+  async createBusinessUnit(_user: Pick<User, "id" | "role"> | null, input: { code: string; name: string; deliveryHeadUserId: string }) {
+    await this.assertDeliveryHeadUser(input.deliveryHeadUserId);
     const code = input.code.trim().toUpperCase();
     if (!/^[A-Z0-9_]{2,24}$/.test(code)) {
       throw new BadRequestException("Business unit code must be 2-24 letters, digits, or underscores");
@@ -557,12 +821,20 @@ export class RevenueDomainService {
       throw new BadRequestException("Business unit name is required");
     }
     return this.prisma.businessUnit.create({
-      data: { code, name }
+      data: { code, name, deliveryHeadUserId: input.deliveryHeadUserId },
+      include: {
+        deliveryHead: { select: { id: true, name: true, email: true } }
+      }
     });
   }
 
-  async listAccountsDetailed() {
+  async listAccountsDetailed(user: Pick<User, "id" | "role"> | null) {
+    const ids = await this.resolveAccessibleAccountIds(user);
+    if (ids !== null && ids.length === 0) {
+      return [];
+    }
     return this.prisma.account.findMany({
+      where: ids === null ? {} : { id: { in: ids } },
       orderBy: { code: "asc" },
       include: {
         businessUnit: { select: { id: true, code: true, name: true } },
@@ -585,13 +857,30 @@ export class RevenueDomainService {
     }
   }
 
-  async createAccountRecord(input: {
-    code: string;
-    displayName: string;
-    businessUnitId: string;
-    deliveryManagerUserId: string;
-    accountManagerUserId: string;
-  }) {
+  async createAccountRecord(
+    user: Pick<User, "id" | "role"> | null,
+    input: {
+      code: string;
+      displayName: string;
+      businessUnitId: string;
+      deliveryManagerUserId: string;
+      accountManagerUserId: string;
+    }
+  ) {
+    if (user) {
+      if (user.role === UserRole.delivery_head) {
+        const bu = await this.prisma.businessUnit.findFirst({
+          where: { id: input.businessUnitId, deliveryHeadUserId: user.id }
+        });
+        if (!bu) throw new ForbiddenException("Access denied");
+      }
+      if (user.role === UserRole.delivery_manager && input.deliveryManagerUserId !== user.id) {
+        throw new ForbiddenException("Access denied");
+      }
+      if (user.role === UserRole.account_manager && input.accountManagerUserId !== user.id) {
+        throw new ForbiddenException("Access denied");
+      }
+    }
     await this.assertAccountManagerPair(input.deliveryManagerUserId, input.accountManagerUserId);
     const code = input.code.trim().toUpperCase().replace(/\s+/g, "_");
     if (!/^[A-Z0-9_]{2,32}$/.test(code)) {
@@ -618,6 +907,7 @@ export class RevenueDomainService {
   }
 
   async updateAccountRecord(
+    user: Pick<User, "id" | "role"> | null,
     accountId: string,
     input: Partial<{
       displayName: string;
@@ -626,6 +916,10 @@ export class RevenueDomainService {
       accountManagerUserId: string;
     }>
   ) {
+    await this.assertAccountInScope(user, accountId);
+    if (input.businessUnitId !== undefined) {
+      await this.assertBusinessUnitInScope(user, input.businessUnitId);
+    }
     const existing = await this.prisma.account.findUniqueOrThrow({ where: { id: accountId } });
     const dmId = input.deliveryManagerUserId ?? existing.deliveryManagerUserId;
     const amId = input.accountManagerUserId ?? existing.accountManagerUserId;
@@ -673,18 +967,39 @@ export class RevenueDomainService {
     });
   }
 
-  async updateBusinessUnitRecord(businessUnitId: string, input: { name: string }) {
-    const name = input.name.trim();
-    if (!name) {
-      throw new BadRequestException("Business unit name is required");
+  async updateBusinessUnitRecord(
+    user: Pick<User, "id" | "role"> | null,
+    businessUnitId: string,
+    input: { name?: string; deliveryHeadUserId?: string }
+  ) {
+    await this.assertBusinessUnitInScope(user, businessUnitId);
+    const data: Prisma.BusinessUnitUpdateInput = {};
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) {
+        throw new BadRequestException("Business unit name is required");
+      }
+      data.name = name;
+    }
+    if (input.deliveryHeadUserId !== undefined) {
+      await this.assertDeliveryHeadUser(input.deliveryHeadUserId);
+      data.deliveryHead = { connect: { id: input.deliveryHeadUserId } };
+    }
+    if (Object.keys(data).length === 0) {
+      return this.prisma.businessUnit.findUniqueOrThrow({
+        where: { id: businessUnitId },
+        include: { deliveryHead: { select: { id: true, name: true, email: true } } }
+      });
     }
     return this.prisma.businessUnit.update({
       where: { id: businessUnitId },
-      data: { name }
+      data,
+      include: { deliveryHead: { select: { id: true, name: true, email: true } } }
     });
   }
 
-  async deleteBusinessUnitRecord(businessUnitId: string) {
+  async deleteBusinessUnitRecord(user: Pick<User, "id" | "role"> | null, businessUnitId: string) {
+    await this.assertBusinessUnitInScope(user, businessUnitId);
     const accountCount = await this.prisma.account.count({ where: { businessUnitId } });
     if (accountCount > 0) {
       throw new BadRequestException(
@@ -695,7 +1010,8 @@ export class RevenueDomainService {
     return { deleted: true as const };
   }
 
-  async deleteAccountRecord(accountId: string) {
+  async deleteAccountRecord(user: Pick<User, "id" | "role"> | null, accountId: string) {
+    await this.assertAccountInScope(user, accountId);
     const projectCount = await this.prisma.project.count({ where: { accountId } });
     if (projectCount > 0) {
       throw new BadRequestException(
@@ -710,15 +1026,33 @@ export class RevenueDomainService {
   }
 
   async ensureStandardOrganizationAndDemoAccounts(): Promise<void> {
+    const demoDhByEmail = await this.prisma.user.findUnique({
+      where: { email: "delivery.head@demo.com" }
+    });
+    const deliveryHead =
+      demoDhByEmail?.role === UserRole.delivery_head
+        ? demoDhByEmail
+        : await this.prisma.user.findFirst({
+            where: { role: UserRole.delivery_head },
+            orderBy: { createdAt: "asc" }
+          });
+    if (!deliveryHead) {
+      return;
+    }
+    const dhId = deliveryHead.id;
+
+    /** Keep demo/template BUs aligned with the canonical demo DH so scoped queries stay correct after DB drift. */
+    const syncDemoBuDeliveryHead = demoDhByEmail?.role === UserRole.delivery_head;
+
     await this.prisma.businessUnit.upsert({
       where: { code: "IO" },
-      create: { id: "phase2bu_io", code: "IO", name: "International Organization" },
-      update: {}
+      create: { id: "phase2bu_io", code: "IO", name: "International Organization", deliveryHeadUserId: dhId },
+      update: syncDemoBuDeliveryHead ? { deliveryHeadUserId: dhId } : {}
     });
     await this.prisma.businessUnit.upsert({
       where: { code: "GEN" },
-      create: { id: "phase2bu_gen", code: "GEN", name: "General" },
-      update: {}
+      create: { id: "phase2bu_gen", code: "GEN", name: "General", deliveryHeadUserId: dhId },
+      update: syncDemoBuDeliveryHead ? { deliveryHeadUserId: dhId } : {}
     });
 
     const dm = await this.prisma.user.findFirst({
@@ -771,6 +1105,26 @@ export class RevenueDomainService {
     });
   }
 
+  /**
+   * Creates demo admin if missing. Runs on every boot so databases that already had projects
+   * (and skipped full seed) still get admin@demo.com after the admin role was introduced.
+   */
+  async ensureDemoAdminUserExists(): Promise<void> {
+    const email = "admin@demo.com";
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return;
+    }
+    await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash: this.authSession.hashPassword("Password@123"),
+        role: UserRole.admin,
+        name: "Administrator"
+      }
+    });
+  }
+
   async seedDemoDataIfEmpty() {
     const projectCount = await this.prisma.project.count();
     if (projectCount > 0) {
@@ -818,7 +1172,7 @@ export class RevenueDomainService {
 
     const acme = await this.prisma.account.findUniqueOrThrow({ where: { code: "ACME" } });
 
-    const project = await this.createProject({
+    const project = await this.createProject(null, {
       projectName: "Alpha Revenue Stream",
       clientName: "Acme Corp",
       accountId: acme.id,
@@ -826,7 +1180,7 @@ export class RevenueDomainService {
       endDate: "2026-12-31"
     });
 
-    const assignment = await this.addAssignment(project.id, {
+    const assignment = await this.addAssignment(null, project.id, {
       employeeId: "E-1001",
       teamMemberName: "Priya Sharma",
       allocationPercent: 100,
@@ -835,16 +1189,16 @@ export class RevenueDomainService {
       signedEndDate: "2026-06-30"
     });
 
-    await this.recordAttendance(project.id, { assignmentId: assignment.id, month: "2026-04", actualDays: 19 });
-    await this.recordAttendance(project.id, { assignmentId: assignment.id, month: "2026-05", actualDays: 20 });
+    await this.recordAttendance(null, project.id, { assignmentId: assignment.id, month: "2026-04", actualDays: 19 });
+    await this.recordAttendance(null, project.id, { assignmentId: assignment.id, month: "2026-05", actualDays: 20 });
 
-    await this.createRateRevision(assignment.id, {
+    await this.createRateRevision(null, assignment.id, {
       effectiveDate: "2026-05-01",
       newRate: 1300,
       authorizerId: deliveryManager.id
     });
 
-    await this.createProjection(assignment.id, {
+    await this.createProjection(null, assignment.id, {
       startDate: "2026-07-01",
       endDate: "2026-08-31",
       projectionRate: 1350

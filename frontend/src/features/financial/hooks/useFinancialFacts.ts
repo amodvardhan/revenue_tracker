@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+
+import { useSession } from "../../../app/SessionContext";
 import type { MonthlyFinancialFact } from "../models/financial";
 import { FinancialApiError, getFinancialFacts } from "../services/financialApi";
 
@@ -9,6 +11,9 @@ interface UseFinancialFactsResult {
 }
 
 export function useFinancialFacts(): UseFinancialFactsResult {
+  const { session } = useSession();
+  const token = session?.token ?? null;
+
   const [facts, setFacts] = useState<MonthlyFinancialFact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FinancialApiError | null>(null);
@@ -17,6 +22,15 @@ export function useFinancialFacts(): UseFinancialFactsResult {
     let isMounted = true;
 
     async function loadFacts() {
+      if (!token) {
+        if (!isMounted) return;
+        setFacts([]);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
       try {
         const nextFacts = await getFinancialFacts();
         if (!isMounted) {
@@ -43,7 +57,7 @@ export function useFinancialFacts(): UseFinancialFactsResult {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [token]);
 
   return { facts, isLoading, error };
 }

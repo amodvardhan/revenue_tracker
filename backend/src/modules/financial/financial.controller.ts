@@ -1,9 +1,22 @@
-import { Body, Controller, Get, Inject, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Req, UseGuards } from "@nestjs/common";
+import type { User } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 
 import { RecomputeDto } from "./dto/recompute.dto";
 import { RevenueManagementService } from "./service/revenue-management.service";
+import { JwtGuard } from "./security/jwt.guard";
+import { Roles } from "./security/roles.decorator";
+import { RolesGuard } from "./security/roles.guard";
 
 @Controller("financial")
+@UseGuards(JwtGuard, RolesGuard)
+@Roles(
+  UserRole.admin,
+  UserRole.delivery_manager,
+  UserRole.account_manager,
+  UserRole.project_manager,
+  UserRole.delivery_head
+)
 export class FinancialController {
   constructor(
     @Inject(RevenueManagementService)
@@ -11,37 +24,23 @@ export class FinancialController {
   ) {}
 
   @Post("recompute")
-  async recompute(@Body() body: RecomputeDto): Promise<{ recomputedKeys: string[] }> {
-    const recomputedKeys = await this.revenueManagementService.recomputeTarget(body);
+  async recompute(@Req() req: { user: User }, @Body() body: RecomputeDto): Promise<{ recomputedKeys: string[] }> {
+    const recomputedKeys = await this.revenueManagementService.recomputeTarget(req.user, body);
     return { recomputedKeys };
   }
 
   @Get("dashboard")
-  async getDashboard() {
-    const projects = await this.revenueManagementService.listProjects();
-    if (projects.length === 0) {
-      return {
-        rows: [],
-        totals: {
-          plannedRevenue: 0,
-          signedRevenue: 0,
-          projectedRevenue: 0,
-          totalRevenue: 0,
-          actualCost: 0,
-          leakage: 0
-        }
-      };
-    }
-    return this.revenueManagementService.getDashboardByProject(projects[0].id);
+  async getDashboard(@Req() req: { user: User }) {
+    return this.revenueManagementService.exportReport(req.user, {});
   }
 
   @Get("export")
-  async getExport() {
-    return this.revenueManagementService.exportReport({});
+  async getExport(@Req() req: { user: User }) {
+    return this.revenueManagementService.exportReport(req.user, {});
   }
 
   @Get("facts")
-  async getFacts() {
-    return this.revenueManagementService.getFinancialFacts();
+  async getFacts(@Req() req: { user: User }) {
+    return this.revenueManagementService.getFinancialFacts(req.user);
   }
 }

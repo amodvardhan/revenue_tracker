@@ -13,6 +13,7 @@ export class BootstrapService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.revenueManagementService.ensureDefaultAppSettings();
+    await this.revenueManagementService.ensureDemoAdminUserExists();
     await this.revenueManagementService.seedDemoDataIfEmpty();
     this.logger.log("Phase-1 demo dataset ready");
   }

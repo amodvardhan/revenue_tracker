@@ -72,9 +72,11 @@ export function OrganizationSettingsPanel({
   const [buCreateOpen, setBuCreateOpen] = useState(false);
   const [buCreateCode, setBuCreateCode] = useState("");
   const [buCreateName, setBuCreateName] = useState("");
+  const [buCreateDhId, setBuCreateDhId] = useState("");
 
   const [buEditTarget, setBuEditTarget] = useState<BusinessUnitRow | null>(null);
   const [buEditName, setBuEditName] = useState("");
+  const [buEditDhId, setBuEditDhId] = useState("");
 
   const [accCreateBuId, setAccCreateBuId] = useState<string | null>(null);
   const [accCreateCode, setAccCreateCode] = useState("");
@@ -117,6 +119,8 @@ export function OrganizationSettingsPanel({
   );
   const accountOwners = useMemo(() => users.filter((u) => u.role === "account_manager"), [users]);
 
+  const deliveryHeads = useMemo(() => users.filter((u) => u.role === "delivery_head"), [users]);
+
   const accountsByBu = useMemo(() => {
     const map = new Map<string, AccountRow[]>();
     for (const row of accounts) {
@@ -133,6 +137,7 @@ export function OrganizationSettingsPanel({
   function resetBuCreate(): void {
     setBuCreateCode("");
     setBuCreateName("");
+    setBuCreateDhId("");
   }
 
   function resetAccCreate(): void {
@@ -148,8 +153,18 @@ export function OrganizationSettingsPanel({
       notifyError(new Error("Enter a short code and a full name for the business unit."));
       return;
     }
+    if (!buCreateDhId) {
+      notifyError(
+        new Error("Choose a delivery head. Create a delivery head user under Configuration → Team & users if none exist.")
+      );
+      return;
+    }
     try {
-      await createBusinessUnit({ code: buCreateCode.trim(), name: buCreateName.trim() });
+      await createBusinessUnit({
+        code: buCreateCode.trim(),
+        name: buCreateName.trim(),
+        deliveryHeadUserId: buCreateDhId
+      });
       notifySuccess("Business unit added.");
       setBuCreateOpen(false);
       resetBuCreate();
@@ -163,8 +178,15 @@ export function OrganizationSettingsPanel({
     if (!buEditTarget || !buEditName.trim()) {
       return;
     }
+    if (!buEditDhId) {
+      notifyError(new Error("Choose a delivery head for this unit."));
+      return;
+    }
     try {
-      await updateBusinessUnit(buEditTarget.id, { name: buEditName.trim() });
+      await updateBusinessUnit(buEditTarget.id, {
+        name: buEditName.trim(),
+        deliveryHeadUserId: buEditDhId
+      });
       notifySuccess("Business unit updated.");
       setBuEditTarget(null);
       await loadAll();
@@ -176,6 +198,7 @@ export function OrganizationSettingsPanel({
   function openBuEdit(bu: BusinessUnitRow): void {
     setBuEditTarget(bu);
     setBuEditName(bu.name);
+    setBuEditDhId(bu.deliveryHead?.id ?? "");
   }
 
   async function submitAccCreate(): Promise<void> {
@@ -288,7 +311,8 @@ export function OrganizationSettingsPanel({
               Step 1 — Business unit
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.25, display: "block" }}>
-              Create a group such as “International Organization (IO)” to hold related client accounts.
+              Create a group such as “International Organization (IO)” and assign exactly one delivery head (owner for the
+              unit). Delivery heads are created under Team & users when you are an administrator.
             </Typography>
           </Box>
           <Box component="li" sx={{ pl: 0.5 }}>
@@ -319,6 +343,7 @@ export function OrganizationSettingsPanel({
             startIcon={<AddRoundedIcon />}
             onClick={() => {
               resetBuCreate();
+              setBuCreateDhId(deliveryHeads[0]?.id ?? "");
               setBuCreateOpen(true);
             }}
             sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
@@ -381,13 +406,14 @@ export function OrganizationSettingsPanel({
                     <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: "-0.02em" }}>
                       {bu.name}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {buAccounts.length} account{buAccounts.length === 1 ? "" : "s"}
+                    <Typography variant="caption" color="text.secondary" component="span" sx={{ display: "block" }}>
+                      Head: {bu.deliveryHead?.name ?? "—"} · {buAccounts.length} account
+                      {buAccounts.length === 1 ? "" : "s"}
                     </Typography>
                   </Box>
                   {canEdit ? (
                     <Stack direction="row" spacing={0.25} onClick={(e) => e.stopPropagation()}>
-                      <Tooltip title="Rename unit">
+                      <Tooltip title="Edit unit">
                         <IconButton
                           size="small"
                           aria-label={`Edit ${bu.code}`}
@@ -534,6 +560,27 @@ export function OrganizationSettingsPanel({
               helperText="What people see in lists and reports"
               fullWidth
             />
+            <FormControl fullWidth required>
+              <InputLabel id="bu-c-dh">Delivery head</InputLabel>
+              <Select
+                labelId="bu-c-dh"
+                label="Delivery head"
+                value={buCreateDhId}
+                onChange={(e: SelectChangeEvent<string>) => setBuCreateDhId(e.target.value)}
+              >
+                {deliveryHeads.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {deliveryHeads.length === 0 ? (
+              <Typography variant="caption" color="warning.main">
+                No delivery head users exist yet. An administrator must create one under Configuration → Team & users
+                before you can add a unit.
+              </Typography>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -545,12 +592,12 @@ export function OrganizationSettingsPanel({
       </Dialog>
 
       <Dialog open={Boolean(buEditTarget)} onClose={() => setBuEditTarget(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Rename business unit</DialogTitle>
+        <DialogTitle>Edit business unit</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Code <Chip label={buEditTarget?.code ?? ""} size="small" sx={{ ml: 0.5, verticalAlign: "middle" }} /> cannot
-              be changed (it is used as a stable key). You can change the display name anytime.
+              be changed (it is used as a stable key). You can change the display name and delivery head anytime.
             </Typography>
             <TextField
               label="Full name"
@@ -559,6 +606,21 @@ export function OrganizationSettingsPanel({
               fullWidth
               autoFocus
             />
+            <FormControl fullWidth required>
+              <InputLabel id="bu-e-dh">Delivery head</InputLabel>
+              <Select
+                labelId="bu-e-dh"
+                label="Delivery head"
+                value={buEditDhId}
+                onChange={(e: SelectChangeEvent<string>) => setBuEditDhId(e.target.value)}
+              >
+                {deliveryHeads.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

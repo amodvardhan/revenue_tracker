@@ -79,6 +79,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders loading state while facts are pending", () => {
+    sessionTestState.session = {
+      token: "test-token",
+      userId: "u1",
+      role: "delivery_manager"
+    };
     const pending = deferred<never[]>();
     getFinancialFactsMock.mockReturnValueOnce(pending.promise);
 
@@ -128,6 +133,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders error state for non-2xx failures from service", async () => {
+    sessionTestState.session = {
+      token: "test-token",
+      userId: "u1",
+      role: "delivery_manager"
+    };
     getFinancialFactsMock.mockRejectedValueOnce(
       new FinancialApiError("http_error", "Financial facts request failed with status 503")
     );
@@ -138,6 +148,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders error state for malformed payload failures from service", async () => {
+    sessionTestState.session = {
+      token: "test-token",
+      userId: "u1",
+      role: "delivery_manager"
+    };
     getFinancialFactsMock.mockRejectedValueOnce(
       new FinancialApiError("validation_error", "Financial facts response has invalid shape")
     );

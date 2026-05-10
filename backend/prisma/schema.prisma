@@ -14,6 +14,7 @@ enum MonthlyFactStatus {
 }
 
 enum UserRole {
+  admin
   delivery_manager
   account_manager
   project_manager
@@ -77,18 +78,21 @@ model User {
   alerts                Alert[]
   deliveryManagedAccounts Account[] @relation("AccountDeliveryManager")
   accountManagedAccounts  Account[] @relation("AccountAccountManager")
+  deliveryHeadForBusinessUnits BusinessUnit[] @relation("BusinessUnitDeliveryHead")
 
   @@map("users")
 }
 
 model BusinessUnit {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(cuid())
+  code                String   @unique
+  name                String
+  deliveryHeadUserId  String   @map("delivery_head_user_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
-  accounts Account[]
+  deliveryHead User     @relation("BusinessUnitDeliveryHead", fields: [deliveryHeadUserId], references: [id], onDelete: Restrict)
+  accounts     Account[]
 
   @@map("business_units")
 }

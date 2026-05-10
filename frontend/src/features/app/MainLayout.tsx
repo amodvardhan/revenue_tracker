@@ -40,14 +40,26 @@ export function MainLayout(): JSX.Element {
   const location = useLocation();
 
   const navItems =
-    session?.role === "delivery_manager" || session?.role === "account_manager"
+    session?.role === "admin" ||
+    session?.role === "delivery_manager" ||
+    session?.role === "account_manager"
       ? [
           ...primaryNavItems,
           { to: "/configuration", label: "Configuration", Icon: TuneRoundedIcon }
         ]
       : primaryNavItems;
 
-  const roleLabel = session?.role.replace(/_/g, " ") ?? "";
+  function formatRoleLabel(role: string): string {
+    return role
+      .split("_")
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+  }
+
+  const displayName = session?.name?.trim() || "Signed in";
+  const roleLabel = session?.role ? formatRoleLabel(session.role) : "";
+  const avatarLetter = (displayName === "Signed in" ? roleLabel || "?" : displayName).charAt(0).toUpperCase();
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
@@ -92,27 +104,44 @@ export function MainLayout(): JSX.Element {
                 border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`
               })}
             >
-              {session?.role?.charAt(0).toUpperCase() ?? "?"}
+              {avatarLetter}
             </Avatar>
-            {roleLabel ? (
-              <Tooltip title={roleLabel} enterDelay={400} placement="bottom">
+            <Tooltip title={roleLabel ? `${displayName} · ${roleLabel}` : displayName} enterDelay={400} placement="bottom">
+              <Box sx={{ minWidth: 0 }}>
                 <Typography
                   variant="body2"
-                  color="text.secondary"
+                  color="text.primary"
                   sx={{
-                    display: { xs: "none", sm: "block" },
-                    maxWidth: 220,
+                    maxWidth: { xs: 140, sm: 220 },
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                     cursor: "default",
-                    fontWeight: 500
+                    fontWeight: 600,
+                    lineHeight: 1.2
                   }}
                 >
-                  {roleLabel}
+                  {displayName}
                 </Typography>
-              </Tooltip>
-            ) : null}
+                {roleLabel ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      display: "block",
+                      maxWidth: { xs: 140, sm: 220 },
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontWeight: 500,
+                      letterSpacing: "0.01em"
+                    }}
+                  >
+                    {roleLabel}
+                  </Typography>
+                ) : null}
+              </Box>
+            </Tooltip>
           </Box>
           <Button color="inherit" variant="text" onClick={() => void logout()} sx={{ fontWeight: 600 }}>
             Sign out

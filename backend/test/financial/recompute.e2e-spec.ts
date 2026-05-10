@@ -8,6 +8,7 @@ import { AppModule } from "../../src/app.module";
 
 describe("POST /api/financial/recompute", () => {
   let app: INestApplication;
+  let authHeader: { Authorization: string };
 
   jest.setTimeout(120000);
 
@@ -19,6 +20,14 @@ describe("POST /api/financial/recompute", () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix("api");
     await app.init();
+
+    const loginResponse = await request(app.getHttpServer())
+      .post("/api/auth/login")
+      .send({ email: "admin@demo.com", password: "Password@123" });
+    if (loginResponse.status !== 201 && loginResponse.status !== 200) {
+      throw new Error(`Login failed: ${loginResponse.status} ${JSON.stringify(loginResponse.body)}`);
+    }
+    authHeader = { Authorization: `Bearer ${loginResponse.body.token as string}` };
   });
 
   afterAll(async () => {
@@ -26,13 +35,17 @@ describe("POST /api/financial/recompute", () => {
   });
 
   it("returns one recomputed key for targeted recompute", async () => {
-    const factsResponse = await request(app.getHttpServer()).get("/api/financial/facts").expect(200);
+    const factsResponse = await request(app.getHttpServer())
+      .get("/api/financial/facts")
+      .set(authHeader)
+      .expect(200);
     expect(Array.isArray(factsResponse.body)).toBe(true);
     expect(factsResponse.body.length).toBeGreaterThan(0);
     const [employeeId, projectId, month] = (factsResponse.body[0].computeKey as string).split("|");
 
     const response = await request(app.getHttpServer())
       .post("/api/financial/recompute")
+      .set(authHeader)
       .send({
         employeeId,
         projectId,
@@ -48,6 +61,7 @@ describe("POST /api/financial/recompute", () => {
   it("returns 400 for invalid payload", async () => {
     await request(app.getHttpServer())
       .post("/api/financial/recompute")
+      .set(authHeader)
       .send({
         employeeId: "   ",
         projectId: " ",
@@ -57,15 +71,24 @@ describe("POST /api/financial/recompute", () => {
   });
 
   it("keeps dashboard and export totals in parity", async () => {
-    const dashboard = await request(app.getHttpServer()).get("/api/financial/dashboard").expect(200);
-    const exported = await request(app.getHttpServer()).get("/api/financial/export").expect(200);
+    const dashboard = await request(app.getHttpServer())
+      .get("/api/financial/dashboard")
+      .set(authHeader)
+      .expect(200);
+    const exported = await request(app.getHttpServer())
+      .get("/api/financial/export")
+      .set(authHeader)
+      .expect(200);
 
     expect(dashboard.body).toHaveProperty("totals");
     expect(exported.body.totals).toEqual(dashboard.body.totals);
   });
 
   it("returns facts payload matching frontend contract", async () => {
-    const response = await request(app.getHttpServer()).get("/api/financial/facts").expect(200);
+    const response = await request(app.getHttpServer())
+      .get("/api/financial/facts")
+      .set(authHeader)
+      .expect(200);
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body.length).toBeGreaterThan(0);
     expect(response.body[0]).toEqual(

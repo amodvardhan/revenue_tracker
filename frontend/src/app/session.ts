@@ -4,6 +4,8 @@ export interface AppSession {
   token: string;
   role: string;
   userId: string;
+  /** Display name from login; older stored sessions may omit until next sign-in. */
+  name?: string;
 }
 
 export function loadSession(): AppSession | null {

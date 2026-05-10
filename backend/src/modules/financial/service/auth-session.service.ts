@@ -10,7 +10,10 @@ export class AuthSessionService {
 
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async login(email: string, password: string): Promise<{ token: string; role: UserRole; userId: string }> {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{ token: string; role: UserRole; userId: string; name: string }> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || user.passwordHash !== this.hashPassword(password)) {
       throw new UnauthorizedException("Invalid email or password");
@@ -21,7 +24,7 @@ export class AuthSessionService {
     this.sessions.set(token, { userId: user.id, expiresAt });
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
-    return { token, role: user.role, userId: user.id };
+    return { token, role: user.role, userId: user.id, name: user.name };
   }
 
   logout(token: string): { success: true } {

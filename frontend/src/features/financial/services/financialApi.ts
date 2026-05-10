@@ -1,3 +1,5 @@
+import { notifyUnauthorized } from "../../../app/apiUnauthorized";
+import { getToken } from "../../../app/session";
 import type { MonthlyFinancialFact } from "../models/financial";
 
 export type FinancialApiErrorKind =
@@ -20,12 +22,22 @@ export class FinancialApiError extends Error {
 
 export async function getFinancialFacts(): Promise<MonthlyFinancialFact[]> {
   const apiUrl = resolveFinancialFactsUrl();
+  const token = getToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
   let response: Response;
 
   try {
-    response = await fetch(apiUrl);
+    response = await fetch(apiUrl, { headers });
   } catch (error) {
     throw toNetworkError(error);
+  }
+
+  if (response.status === 401 && token) {
+    notifyUnauthorized();
   }
 
   if (!response.ok) {
@@ -75,6 +87,20 @@ function validateFinancialFactsPayload(payload: unknown): MonthlyFinancialFact[]
   return payload.map((item) => validateFinancialFact(item));
 }
 
+/** Accepts JSON numbers and numeric strings (some servers / proxies alter number encoding). */
+function requireFiniteNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n)) {
+      return n;
+    }
+  }
+  throw new FinancialApiError("validation_error", "Financial facts response has invalid shape");
+}
+
 function validateFinancialFact(item: unknown): MonthlyFinancialFact {
   if (typeof item !== "object" || item == null) {
     throw new FinancialApiError("validation_error", "Financial facts response has invalid shape");
@@ -92,18 +118,19 @@ function validateFinancialFact(item: unknown): MonthlyFinancialFact {
     typeof candidate.account !== "string" ||
     typeof candidate.clientName !== "string" ||
     typeof candidate.teamMemberName !== "string" ||
-    !isValidStatus ||
-    typeof candidate.signedRevenue !== "number" ||
-    typeof candidate.projectedRevenue !== "number" ||
-    typeof candidate.totalRevenue !== "number" ||
-    typeof candidate.actualCost !== "number" ||
-    typeof candidate.plannedRevenue !== "number" ||
-    typeof candidate.plannedMargin !== "number" ||
-    typeof candidate.actualMargin !== "number" ||
-    typeof candidate.marginVariance !== "number"
+    !isValidStatus
   ) {
     throw new FinancialApiError("validation_error", "Financial facts response has invalid shape");
   }
+
+  const signedRevenue = requireFiniteNumber(candidate.signedRevenue);
+  const projectedRevenue = requireFiniteNumber(candidate.projectedRevenue);
+  const totalRevenue = requireFiniteNumber(candidate.totalRevenue);
+  const actualCost = requireFiniteNumber(candidate.actualCost);
+  const plannedRevenue = requireFiniteNumber(candidate.plannedRevenue);
+  const plannedMargin = requireFiniteNumber(candidate.plannedMargin);
+  const actualMargin = requireFiniteNumber(candidate.actualMargin);
+  const marginVariance = requireFiniteNumber(candidate.marginVariance);
 
   return {
     computeKey: candidate.computeKey,
@@ -118,14 +145,14 @@ function validateFinancialFact(item: unknown): MonthlyFinancialFact {
     clientName: candidate.clientName,
     teamMemberName: candidate.teamMemberName,
     status,
-    signedRevenue: candidate.signedRevenue,
-    projectedRevenue: candidate.projectedRevenue,
-    totalRevenue: candidate.totalRevenue,
-    actualCost: candidate.actualCost,
-    plannedRevenue: candidate.plannedRevenue,
-    plannedMargin: candidate.plannedMargin,
-    actualMargin: candidate.actualMargin,
-    marginVariance: candidate.marginVariance
+    signedRevenue,
+    projectedRevenue,
+    totalRevenue,
+    actualCost,
+    plannedRevenue,
+    plannedMargin,
+    actualMargin,
+    marginVariance
   };
 }
 

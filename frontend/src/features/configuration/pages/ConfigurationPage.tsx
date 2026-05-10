@@ -17,13 +17,14 @@ import { PageHeader } from "../../../app/PageHeader";
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import { useSession } from "../../../app/SessionContext";
 import { OrganizationSettingsPanel } from "../components/OrganizationSettingsPanel";
+import { UserManagementPanel } from "../components/UserManagementPanel";
 import { getAppSettings, updateAppSettings } from "../../app/services/appApi";
 
 function normalizeCurrencyInput(raw: string): string {
   return raw.trim().toUpperCase().slice(0, 3);
 }
 
-type ConfigurationTab = "defaults" | "organization";
+type ConfigurationTab = "defaults" | "organization" | "team";
 
 export function ConfigurationPage(): JSX.Element {
   const { refresh: refreshAppSettings } = useAppSettings();
@@ -31,8 +32,11 @@ export function ConfigurationPage(): JSX.Element {
   const { notifySuccess, notifyError, FeedbackSnackbar } = usePageFeedback();
   const [searchParams] = useSearchParams();
 
+  const isAdmin = session?.role === "admin";
   const canEdit =
-    session?.role === "delivery_manager" || session?.role === "account_manager";
+    isAdmin ||
+    session?.role === "delivery_manager" ||
+    session?.role === "account_manager";
 
   const [configTab, setConfigTab] = useState<ConfigurationTab>("defaults");
   const [defaultCurrencyCode, setDefaultCurrencyCode] = useState("EUR");
@@ -41,10 +45,20 @@ export function ConfigurationPage(): JSX.Element {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get("section") === "organization") {
+    const section = searchParams.get("section");
+    if (section === "organization") {
       setConfigTab("organization");
     }
-  }, [searchParams]);
+    if (section === "team" && session?.role === "admin") {
+      setConfigTab("team");
+    }
+  }, [searchParams, session?.role]);
+
+  useEffect(() => {
+    if (configTab === "team" && session?.role !== "admin") {
+      setConfigTab("defaults");
+    }
+  }, [configTab, session?.role]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,8 +118,8 @@ export function ConfigurationPage(): JSX.Element {
         title="Configuration"
         description={
           canEdit
-            ? "Reporting defaults, business units, and accounts (with delivery and account managers)."
-            : "View organization settings. Editing is limited to delivery and account managers."
+            ? "Reporting defaults, organization structure (business units with a delivery head per unit, accounts with delivery and account managers), and—when you are an administrator—managed users."
+            : "View organization settings. Editing is limited to administrators, delivery managers, and account managers."
         }
       />
 
@@ -118,6 +132,7 @@ export function ConfigurationPage(): JSX.Element {
         >
           <Tab value="defaults" label="Reporting defaults" />
           <Tab value="organization" label="Organization" />
+          {isAdmin ? <Tab value="team" label="Team & users" /> : null}
         </Tabs>
       </Paper>
 
@@ -163,14 +178,16 @@ export function ConfigurationPage(): JSX.Element {
               </Box>
             ) : (
               <Typography variant="body2" color="text.secondary">
-                Only delivery managers and account managers can change these values.
+                Only administrators, delivery managers, and account managers can change these values.
               </Typography>
             )}
           </Stack>
         </Paper>
-      ) : (
+      ) : configTab === "organization" ? (
         <OrganizationSettingsPanel canEdit={canEdit} notifySuccess={notifySuccess} notifyError={notifyError} />
-      )}
+      ) : isAdmin ? (
+        <UserManagementPanel notifySuccess={notifySuccess} notifyError={notifyError} />
+      ) : null}
       {FeedbackSnackbar}
     </Box>
   );
