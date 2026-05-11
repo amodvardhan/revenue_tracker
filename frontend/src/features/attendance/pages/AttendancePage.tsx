@@ -34,6 +34,7 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import type { SelectChangeEvent } from "@mui/material/Select";
 
+import { useSession } from "../../../app/SessionContext";
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import {
   bulkUploadAttendance,
@@ -51,8 +52,19 @@ import {
 import { PageHeader } from "../../../app/PageHeader";
 import { cellNumber, cellString, downloadMatrix, parseFirstSheetRecords } from "../../../lib/xlsxBulk";
 
+function canMutateAttendance(role: string | undefined): boolean {
+  return (
+    role === "admin" ||
+    role === "delivery_manager" ||
+    role === "account_manager" ||
+    role === "project_manager"
+  );
+}
+
 export function AttendancePage(): JSX.Element {
+  const { session } = useSession();
   const { notifySuccess, notifyError, notifyRawError, FeedbackSnackbar } = usePageFeedback();
+  const allowAttendanceMutations = canMutateAttendance(session?.role);
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -353,26 +365,34 @@ export function AttendancePage(): JSX.Element {
                         <TableCell>{row.assignment.employeeId}</TableCell>
                         <TableCell align="right">{row.actualDays}</TableCell>
                         <TableCell align="right">
-                          <Tooltip title="Load into form to change days">
-                            <IconButton
-                              size="small"
-                              aria-label={`Edit ${row.month}`}
-                              onClick={() => startEdit(row)}
-                              color={editingId === row.id ? "primary" : "default"}
-                            >
-                              <EditRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Remove this month">
-                            <IconButton
-                              size="small"
-                              aria-label={`Delete ${row.month}`}
-                              onClick={() => setDeleteTarget(row)}
-                              color="error"
-                            >
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          {allowAttendanceMutations ? (
+                            <>
+                              <Tooltip title="Load into form to change days">
+                                <IconButton
+                                  size="small"
+                                  aria-label={`Edit ${row.month}`}
+                                  onClick={() => startEdit(row)}
+                                  color={editingId === row.id ? "primary" : "default"}
+                                >
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Remove this month">
+                                <IconButton
+                                  size="small"
+                                  aria-label={`Delete ${row.month}`}
+                                  onClick={() => setDeleteTarget(row)}
+                                  color="error"
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              View only
+                            </Typography>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -387,7 +407,11 @@ export function AttendancePage(): JSX.Element {
           <Typography variant="subtitle2" color="text.secondary" sx={{ letterSpacing: "0.04em", mb: 1 }}>
             Step 2 · Add or update a month
           </Typography>
-          {editingId ? (
+          {!allowAttendanceMutations ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Your role can review attendance here; changes require an administrator, delivery manager, account manager, or project manager.
+            </Typography>
+          ) : editingId ? (
             <Chip
               label={`Editing ${month} · save to apply changes`}
               onDelete={() => clearForm()}
@@ -401,7 +425,12 @@ export function AttendancePage(): JSX.Element {
             </Typography>
           )}
           <Stack spacing={2} component="form" onSubmit={handleSubmit} noValidate>
-            <FormControl fullWidth sx={{ maxWidth: 480 }} disabled={!projectId} error={Boolean(errors.assignmentId)}>
+            <FormControl
+              fullWidth
+              sx={{ maxWidth: 480 }}
+              disabled={!projectId || !allowAttendanceMutations}
+              error={Boolean(errors.assignmentId)}
+            >
               <InputLabel id="attendance-assignment-label">Assignment</InputLabel>
               <Select
                 labelId="attendance-assignment-label"
@@ -436,6 +465,7 @@ export function AttendancePage(): JSX.Element {
                 label="Month"
                 placeholder="YYYY-MM"
                 value={month}
+                disabled={!allowAttendanceMutations}
                 onChange={(event) => {
                   setMonth(event.target.value);
                   setErrors((e) => ({ ...e, month: undefined }));
@@ -447,6 +477,7 @@ export function AttendancePage(): JSX.Element {
               <TextField
                 label="Actual days"
                 type="number"
+                disabled={!allowAttendanceMutations}
                 slotProps={{ htmlInput: { min: 0, step: 0.5 } }}
                 value={actualDays}
                 onChange={(event) => {
@@ -460,7 +491,7 @@ export function AttendancePage(): JSX.Element {
             </Stack>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <Button type="submit" size="large" disabled={!projectId}>
+              <Button type="submit" size="large" disabled={!projectId || !allowAttendanceMutations}>
                 {editingId ? "Update attendance" : "Save attendance"}
               </Button>
               <Button
@@ -496,7 +527,7 @@ export function AttendancePage(): JSX.Element {
               <Button variant="outlined" onClick={downloadAttendanceTemplate}>
                 Download template
               </Button>
-              <Button variant="contained" component="label" disabled={!projectId}>
+              <Button variant="contained" component="label" disabled={!projectId || !allowAttendanceMutations}>
                 Upload workbook
                 <input
                   type="file"

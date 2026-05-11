@@ -4,6 +4,11 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   FormControl,
   FormHelperText,
@@ -27,6 +32,8 @@ import {
 } from "@mui/material";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
@@ -36,14 +43,17 @@ import type { SelectChangeEvent } from "@mui/material/Select";
 import { Link as RouterLink } from "react-router-dom";
 
 import { useFormatMoney } from "../../../app/AppSettingsContext";
+import { useSession } from "../../../app/SessionContext";
 import { usePageFeedback } from "../../../app/usePageFeedback";
 import {
   bulkUploadAssignments,
   createAssignment,
   createProject,
+  deleteAssignment,
   listAccounts,
   listAssignments,
   listProjects,
+  updateAssignment,
   type AccountRow,
   type AssignmentRow,
   type BulkAssignmentRow,
@@ -90,9 +100,24 @@ function formatAssignmentContractWindow(assignment: AssignmentRow): string {
   }
 }
 
+function isoDateToInput(iso: string): string {
+  return iso ? iso.slice(0, 10) : "";
+}
+
+function canMutateAssignments(role: string | undefined): boolean {
+  return (
+    role === "admin" ||
+    role === "delivery_manager" ||
+    role === "account_manager" ||
+    role === "project_manager"
+  );
+}
+
 export function ProjectsPage(): JSX.Element {
   const { formatAmountFlexible } = useFormatMoney();
+  const { session } = useSession();
   const { notifySuccess, notifyError, notifyRawError, FeedbackSnackbar } = usePageFeedback();
+  const allowAssignmentMutations = canMutateAssignments(session?.role);
   const [tab, setTab] = useState<ProjectTab>("create");
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -114,6 +139,9 @@ export function ProjectsPage(): JSX.Element {
   const [signedStartDate, setSignedStartDate] = useState("");
   const [signedEndDate, setSignedEndDate] = useState("");
   const [assignmentErrors, setAssignmentErrors] = useState<Partial<Record<string, string>>>({});
+
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [deleteAssignmentTarget, setDeleteAssignmentTarget] = useState<AssignmentRow | null>(null);
 
   const assignmentsBulkFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -238,7 +266,7 @@ export function ProjectsPage(): JSX.Element {
     return Object.keys(next).length === 0;
   }
 
-  async function handleCreateAssignment(event: React.FormEvent): Promise<void> {
+  async function handleAssignmentSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     if (!validateAssignmentForm()) {
       return;
@@ -246,22 +274,78 @@ export function ProjectsPage(): JSX.Element {
     const pct = Number(allocationPercent);
     const rate = Number(dailyRate);
     try {
-      await createAssignment(assignmentProjectId, {
-        employeeId: employeeId.trim(),
-        teamMemberName: teamMemberName.trim(),
-        allocationPercent: pct,
-        dailyRate: rate,
-        signedStartDate,
-        signedEndDate
-      });
-      notifySuccess("Assignment added.");
+      if (editingAssignmentId) {
+        await updateAssignment(editingAssignmentId, {
+          teamMemberName: teamMemberName.trim(),
+          allocationPercent: pct,
+          dailyRate: rate,
+          signedStartDate,
+          signedEndDate
+        });
+        notifySuccess("Assignment updated.");
+      } else {
+        await createAssignment(assignmentProjectId, {
+          employeeId: employeeId.trim(),
+          teamMemberName: teamMemberName.trim(),
+          allocationPercent: pct,
+          dailyRate: rate,
+          signedStartDate,
+          signedEndDate
+        });
+        notifySuccess("Assignment added.");
+      }
       setEmployeeId("");
       setTeamMemberName("");
       setAllocationPercent("");
       setDailyRate("");
       setSignedStartDate("");
       setSignedEndDate("");
+      setEditingAssignmentId(null);
       setAssignmentErrors({});
+      const rows = await listAssignments(assignmentProjectId);
+      setAssignments(rows);
+    } catch (err) {
+      notifyError(err);
+    }
+  }
+
+  function startEditAssignment(row: AssignmentRow): void {
+    setEditingAssignmentId(row.id);
+    setEmployeeId(row.employeeId);
+    setTeamMemberName(row.teamMemberName);
+    setAllocationPercent(String(row.allocationPercent));
+    setDailyRate(String(row.dailyRate));
+    setSignedStartDate(isoDateToInput(row.signedStartDate));
+    setSignedEndDate(isoDateToInput(row.signedEndDate));
+    setAssignmentErrors({});
+    requestAnimationFrame(() => {
+      document.getElementById("assignment-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function clearAssignmentForm(): void {
+    setEditingAssignmentId(null);
+    setEmployeeId("");
+    setTeamMemberName("");
+    setAllocationPercent("");
+    setDailyRate("");
+    setSignedStartDate("");
+    setSignedEndDate("");
+    setAssignmentErrors({});
+  }
+
+  async function confirmDeleteAssignment(): Promise<void> {
+    if (!deleteAssignmentTarget || !assignmentProjectId) {
+      return;
+    }
+    const removedId = deleteAssignmentTarget.id;
+    try {
+      await deleteAssignment(removedId);
+      notifySuccess("Assignment removed.");
+      setDeleteAssignmentTarget(null);
+      if (editingAssignmentId === removedId) {
+        clearAssignmentForm();
+      }
       const rows = await listAssignments(assignmentProjectId);
       setAssignments(rows);
     } catch (err) {
@@ -810,8 +894,8 @@ export function ProjectsPage(): JSX.Element {
                     </Typography>
                   </Box>
                 ) : (
-                  <TableContainer sx={{ maxHeight: 320 }}>
-                    <Table size="small" stickyHeader aria-label="People assigned to this project">
+                  <TableContainer sx={{ maxHeight: 320, overflowX: "auto" }}>
+                    <Table size="small" stickyHeader aria-label="People assigned to this project" sx={{ minWidth: allowAssignmentMutations ? 720 : 560 }}>
                       <TableHead>
                         <TableRow>
                           <TableCell>Team member</TableCell>
@@ -820,6 +904,7 @@ export function ProjectsPage(): JSX.Element {
                           <TableCell align="right">Daily rate</TableCell>
                           <TableCell>Contract window</TableCell>
                           <TableCell align="right">Assignment ID</TableCell>
+                          {allowAssignmentMutations ? <TableCell align="right">Actions</TableCell> : null}
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -827,6 +912,7 @@ export function ProjectsPage(): JSX.Element {
                           <TableRow
                             key={assignment.id}
                             hover
+                            selected={editingAssignmentId === assignment.id}
                             sx={{
                               "&:nth-of-type(even)": { bgcolor: alpha("#000000", 0.02) }
                             }}
@@ -868,6 +954,30 @@ export function ProjectsPage(): JSX.Element {
                                 </Tooltip>
                               </Stack>
                             </TableCell>
+                            {allowAssignmentMutations ? (
+                              <TableCell align="right" sx={{ verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                                <Tooltip title="Edit in form below">
+                                  <IconButton
+                                    size="small"
+                                    aria-label={`Edit ${assignment.teamMemberName}`}
+                                    onClick={() => startEditAssignment(assignment)}
+                                    color={editingAssignmentId === assignment.id ? "primary" : "default"}
+                                  >
+                                    <EditRoundedIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Remove assignment">
+                                  <IconButton
+                                    size="small"
+                                    aria-label={`Delete ${assignment.teamMemberName}`}
+                                    color="error"
+                                    onClick={() => setDeleteAssignmentTarget(assignment)}
+                                  >
+                                    <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </TableCell>
+                            ) : null}
                           </TableRow>
                         ))}
                       </TableBody>
@@ -877,17 +987,30 @@ export function ProjectsPage(): JSX.Element {
               </Paper>
             ) : null}
 
-            <Box component="form" onSubmit={handleCreateAssignment} noValidate>
+            <Box component="form" id="assignment-form" onSubmit={handleAssignmentSubmit} noValidate>
+              {editingAssignmentId ? (
+                <Chip
+                  label="Editing an existing assignment — employee ID is fixed for this seat."
+                  onDelete={() => clearAssignmentForm()}
+                  sx={{ mb: 2 }}
+                  color="primary"
+                  variant="outlined"
+                />
+              ) : null}
               <Stack spacing={2} direction={{ xs: "column", md: "row" }} sx={{ flexWrap: "wrap" }}>
                 <TextField
                   label="Employee ID"
                   value={employeeId}
+                  disabled={Boolean(editingAssignmentId)}
                   onChange={(event) => {
                     setEmployeeId(event.target.value);
                     setAssignmentErrors((e) => ({ ...e, employeeId: undefined }));
                   }}
                   error={Boolean(assignmentErrors.employeeId)}
-                  helperText={assignmentErrors.employeeId ?? "Stable id from HR / roster."}
+                  helperText={
+                    assignmentErrors.employeeId ??
+                    (editingAssignmentId ? "Cannot change ID while editing — delete and re-add if needed." : "Stable id from HR / roster.")
+                  }
                   sx={{ flex: "1 1 160px" }}
                 />
                 <TextField
@@ -950,9 +1073,12 @@ export function ProjectsPage(): JSX.Element {
                   sx={{ flex: "1 1 160px" }}
                 />
               </Stack>
-              <Button type="submit" sx={{ mt: 2 }}>
-                Create assignment
-              </Button>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 2 }}>
+                <Button type="submit">{editingAssignmentId ? "Save changes" : "Create assignment"}</Button>
+                <Button type="button" variant="outlined" onClick={clearAssignmentForm} disabled={!editingAssignmentId && !employeeId && !teamMemberName.trim()}>
+                  Clear
+                </Button>
+              </Stack>
             </Box>
 
             <Divider sx={{ my: 3 }} />
@@ -991,6 +1117,24 @@ export function ProjectsPage(): JSX.Element {
           </Paper>
         ) : null}
       </Stack>
+
+      <Dialog open={deleteAssignmentTarget !== null} onClose={() => setDeleteAssignmentTarget(null)}>
+        <DialogTitle>Remove assignment?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {deleteAssignmentTarget
+              ? `Delete ${deleteAssignmentTarget.teamMemberName} (${deleteAssignmentTarget.employeeId})? Attendance and revenue rows for this seat are removed.`
+              : null}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteAssignmentTarget(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={() => void confirmDeleteAssignment()}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {FeedbackSnackbar}
     </>
   );

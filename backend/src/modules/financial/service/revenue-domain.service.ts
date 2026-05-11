@@ -395,6 +395,12 @@ export class RevenueDomainService {
     return assignment;
   }
 
+  async deleteAssignment(user: Pick<User, "id" | "role"> | null, assignmentId: string) {
+    await this.assertAssignmentInScope(user, assignmentId);
+    await this.prisma.assignment.delete({ where: { id: assignmentId } });
+    return { deleted: true as const };
+  }
+
   async recordAttendance(
     user: Pick<User, "id" | "role"> | null,
     projectId: string,

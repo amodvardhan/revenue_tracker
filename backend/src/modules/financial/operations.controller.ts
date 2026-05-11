@@ -108,6 +108,12 @@ export class OperationsController {
     return this.revenueManagementService.updateAssignment(req.user, assignmentId, body);
   }
 
+  @Delete("assignments/:assignmentId")
+  @Roles(UserRole.admin, UserRole.delivery_manager, UserRole.account_manager, UserRole.project_manager)
+  async deleteAssignment(@Req() req: { user: User }, @Param("assignmentId") assignmentId: string) {
+    return this.revenueManagementService.deleteAssignment(req.user, assignmentId);
+  }
+
   @Post("projects/:projectId/attendance")
   @Roles(UserRole.admin, UserRole.delivery_manager, UserRole.account_manager, UserRole.project_manager)
   async addAttendance(

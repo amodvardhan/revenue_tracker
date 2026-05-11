@@ -1,8 +1,10 @@
 import React from "react";
 import {
   Box,
+  Chip,
   CircularProgress,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -24,6 +26,11 @@ interface FinancialGridProps {
   error: FinancialApiError | null;
 }
 
+const numericCellSx = {
+  fontVariantNumeric: "tabular-nums" as const,
+  whiteSpace: "nowrap" as const
+};
+
 function formatStatus(status: MonthlyFactStatus): string {
   if (status === "blocked") {
     return "Blocked";
@@ -34,6 +41,16 @@ function formatStatus(status: MonthlyFactStatus): string {
   }
 
   return "Final";
+}
+
+function statusChipProps(status: MonthlyFactStatus): { color: "default" | "warning" | "success"; variant: "filled" | "outlined" } {
+  if (status === "blocked") {
+    return { color: "default", variant: "outlined" };
+  }
+  if (status === "provisional") {
+    return { color: "warning", variant: "filled" };
+  }
+  return { color: "success", variant: "outlined" };
 }
 
 export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): JSX.Element {
@@ -75,86 +92,155 @@ export function FinancialGrid({ facts, isLoading, error }: FinancialGridProps): 
   }
 
   return (
-    <TableContainer
-      component={Paper}
-      elevation={0}
-      sx={{
-        borderRadius: `${surfaceRadiusPx}px`,
-        overflow: "hidden",
-        "& .MuiTableCell-root": {
-          borderColor: "divider"
-        }
-      }}
-    >
-      <Table size="small" stickyHeader aria-label="Monthly financial facts">
-        <TableHead>
-          <TableRow>
-            <TableCell>Month</TableCell>
-            <TableCell>Project</TableCell>
-            <TableCell>Team member</TableCell>
-            <TableCell align="right">Actual Cost</TableCell>
-            <TableCell align="right">Signed Revenue</TableCell>
-            <TableCell align="right">Projected Revenue</TableCell>
-            <TableCell align="right">Total Revenue</TableCell>
-            <TableCell align="right">Leakage</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell align="right">Margin Variance</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {facts.map((fact, index) => {
-            const leakage = fact.plannedRevenue - fact.actualCost;
-            const muted = index % 2 === 1;
-            return (
-              <TableRow
-                key={fact.computeKey}
-                sx={{
-                  bgcolor: muted ? alpha("#000000", 0.02) : "transparent",
-                  "&:last-child td": { borderBottom: 0 }
-                }}
-              >
-                <TableCell sx={{ fontWeight: 500 }}>{fact.month}</TableCell>
-                <TableCell sx={{ maxWidth: 200 }}>
-                  <Typography variant="body2" noWrap title={fact.projectName}>
-                    {fact.projectName}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    noWrap
-                    title={[fact.account, fact.businessUnitCode].filter(Boolean).join(" · ")}
-                  >
-                    {[fact.account, fact.businessUnitCode].filter(Boolean).join(" · ")}
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ maxWidth: 180 }}>
-                  <Typography variant="body2" noWrap title={fact.teamMemberName}>
-                    {fact.teamMemberName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>
-                    {fact.employeeId}
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">{formatAmount(fact.actualCost)}</TableCell>
-                <TableCell align="right">{formatAmount(fact.signedRevenue)}</TableCell>
-                <TableCell align="right">{formatAmount(fact.projectedRevenue)}</TableCell>
-                <TableCell align="right">{formatAmount(fact.totalRevenue)}</TableCell>
-                <TableCell
-                  align="right"
+    <Stack spacing={1.5} sx={{ mt: 1 }}>
+      <Box sx={{ px: { xs: 0, sm: 0.5 } }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
+          Monthly performance
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, maxWidth: 560 }}>
+          Scroll horizontally on narrow screens—amount columns stay aligned. Status uses color; margin variance highlights plan vs. actual.
+        </Typography>
+      </Box>
+
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{
+          borderRadius: `${surfaceRadiusPx}px`,
+          border: 1,
+          borderColor: "divider",
+          overflow: "auto",
+          maxWidth: "100%",
+          WebkitOverflowScrolling: "touch",
+          "& .MuiTableCell-root": {
+            borderColor: "divider"
+          }
+        }}
+      >
+        <Table
+          size="small"
+          stickyHeader
+          aria-label="Monthly financial facts"
+          sx={{
+            minWidth: 1040,
+            tableLayout: "fixed",
+            "& .MuiTableCell-head": {
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
+              fontWeight: 700,
+              fontSize: "0.75rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              whiteSpace: "nowrap"
+            }
+          }}
+        >
+          <colgroup>
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+          </colgroup>
+          <TableHead>
+            <TableRow>
+              <TableCell>Month</TableCell>
+              <TableCell>Project</TableCell>
+              <TableCell>Team</TableCell>
+              <TableCell align="right">Cost</TableCell>
+              <TableCell align="right">Signed</TableCell>
+              <TableCell align="right">Projected</TableCell>
+              <TableCell align="right">Total</TableCell>
+              <TableCell align="right">Leakage</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell align="right">Margin Δ</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {facts.map((fact, index) => {
+              const leakage = fact.plannedRevenue - fact.actualCost;
+              const muted = index % 2 === 1;
+              const st = statusChipProps(fact.status);
+              return (
+                <TableRow
+                  key={fact.computeKey}
                   sx={{
-                    fontWeight: 600,
-                    color: leakage < 0 ? "error.main" : "success.main"
+                    bgcolor: muted ? alpha("#000000", 0.025) : "transparent",
+                    "&:last-child td": { borderBottom: 0 },
+                    transition: "background-color 0.15s ease"
                   }}
                 >
-                  {formatSigned(leakage)}
-                </TableCell>
-                <TableCell>{formatStatus(fact.status)}</TableCell>
-                <TableCell align="right">{formatSigned(fact.marginVariance)}</TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                  <TableCell sx={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fact.month}</TableCell>
+                  <TableCell sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.35 }} noWrap title={fact.projectName}>
+                      {fact.projectName}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                      noWrap
+                      title={[fact.account, fact.businessUnitCode].filter(Boolean).join(" · ")}
+                    >
+                      {[fact.account, fact.businessUnitCode].filter(Boolean).join(" · ")}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap title={fact.teamMemberName}>
+                      {fact.teamMemberName}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" noWrap title={fact.employeeId}>
+                      {fact.employeeId}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right" sx={numericCellSx}>
+                    {formatAmount(fact.actualCost)}
+                  </TableCell>
+                  <TableCell align="right" sx={numericCellSx}>
+                    {formatAmount(fact.signedRevenue)}
+                  </TableCell>
+                  <TableCell align="right" sx={numericCellSx}>
+                    {formatAmount(fact.projectedRevenue)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ ...numericCellSx, fontWeight: 600 }}>
+                    {formatAmount(fact.totalRevenue)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      ...numericCellSx,
+                      fontWeight: 600,
+                      color: leakage < 0 ? "error.main" : "success.main"
+                    }}
+                  >
+                    {formatSigned(leakage)}
+                  </TableCell>
+                  <TableCell sx={{ py: 1 }}>
+                    <Chip label={formatStatus(fact.status)} size="small" {...st} sx={{ fontWeight: 600 }} />
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      ...numericCellSx,
+                      fontWeight: 600,
+                      minWidth: "7.5rem",
+                      pr: 2,
+                      color:
+                        fact.marginVariance < 0 ? "error.main" : fact.marginVariance > 0 ? "success.main" : "text.primary"
+                    }}
+                  >
+                    {formatSigned(fact.marginVariance)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
   );
 }

@@ -313,6 +313,26 @@ export async function createAssignment(
   });
 }
 
+export type UpdateAssignmentPayload = Partial<
+  Pick<CreateAssignmentPayload, "teamMemberName" | "allocationPercent" | "dailyRate" | "signedStartDate" | "signedEndDate">
+>;
+
+export async function updateAssignment(
+  assignmentId: string,
+  payload: UpdateAssignmentPayload
+): Promise<AssignmentRow> {
+  return requestJson<AssignmentRow>(`/api/assignments/${assignmentId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteAssignment(assignmentId: string): Promise<{ deleted: true }> {
+  return requestJson<{ deleted: true }>(`/api/assignments/${assignmentId}`, {
+    method: "DELETE"
+  });
+}
+
 export async function listAttendance(projectId: string): Promise<AttendanceRecord[]> {
   return requestJson<AttendanceRecord[]>(`/api/projects/${projectId}/attendance`);
 }
