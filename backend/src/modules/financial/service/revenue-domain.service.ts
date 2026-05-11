@@ -1132,40 +1132,48 @@ export class RevenueDomainService {
       return;
     }
 
-    const deliveryManager = await this.prisma.user.create({
-      data: {
+    const deliveryManager = await this.prisma.user.upsert({
+      where: { email: "delivery.manager@demo.com" },
+      create: {
         email: "delivery.manager@demo.com",
         passwordHash: this.authSession.hashPassword("Password@123"),
         role: UserRole.delivery_manager,
         name: "Delivery Manager"
-      }
+      },
+      update: {}
     });
 
-    await this.prisma.user.create({
-      data: {
+    await this.prisma.user.upsert({
+      where: { email: "account.manager@demo.com" },
+      create: {
         email: "account.manager@demo.com",
         passwordHash: this.authSession.hashPassword("Password@123"),
         role: UserRole.account_manager,
         name: "Account Manager"
-      }
+      },
+      update: {}
     });
 
-    await this.prisma.user.create({
-      data: {
+    await this.prisma.user.upsert({
+      where: { email: "project.manager@demo.com" },
+      create: {
         email: "project.manager@demo.com",
         passwordHash: this.authSession.hashPassword("Password@123"),
         role: UserRole.project_manager,
         name: "Project Manager"
-      }
+      },
+      update: {}
     });
 
-    await this.prisma.user.create({
-      data: {
+    await this.prisma.user.upsert({
+      where: { email: "delivery.head@demo.com" },
+      create: {
         email: "delivery.head@demo.com",
         passwordHash: this.authSession.hashPassword("Password@123"),
         role: UserRole.delivery_head,
         name: "Delivery Head"
-      }
+      },
+      update: {}
     });
 
     await this.ensureStandardOrganizationAndDemoAccounts();

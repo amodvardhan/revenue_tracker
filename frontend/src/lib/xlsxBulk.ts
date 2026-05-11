@@ -9,7 +9,7 @@ export function downloadMatrix(filename: string, sheetName: string, matrix: (str
 
 export async function parseFirstSheetRecords(file: File): Promise<Record<string, unknown>[]> {
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer);
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: true });
   const firstName = workbook.SheetNames[0];
   if (!firstName) {
     return [];
@@ -21,6 +21,15 @@ export async function parseFirstSheetRecords(file: File): Promise<Record<string,
 export function cellString(value: unknown): string {
   if (value == null) {
     return "";
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return "";
+    }
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
   if (typeof value === "number") {
     return String(value);

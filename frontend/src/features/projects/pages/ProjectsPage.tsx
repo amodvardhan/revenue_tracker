@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Avatar,
   Box,
@@ -114,6 +114,8 @@ export function ProjectsPage(): JSX.Element {
   const [signedStartDate, setSignedStartDate] = useState("");
   const [signedEndDate, setSignedEndDate] = useState("");
   const [assignmentErrors, setAssignmentErrors] = useState<Partial<Record<string, string>>>({});
+
+  const assignmentsBulkFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -966,15 +968,25 @@ export function ProjectsPage(): JSX.Element {
               <Button variant="outlined" onClick={downloadAssignmentsTemplate}>
                 Download template
               </Button>
-              <Button variant="contained" component="label">
+              <Button
+                type="button"
+                variant="contained"
+                onClick={() => assignmentsBulkFileInputRef.current?.click()}
+              >
                 Upload workbook
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  hidden
-                  onChange={(event) => void handleBulkAssignmentsFile(event.target.files?.[0] ?? null)}
-                />
               </Button>
+              <input
+                ref={assignmentsBulkFileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                style={{ display: "none" }}
+                tabIndex={-1}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  void handleBulkAssignmentsFile(file);
+                }}
+              />
             </Stack>
           </Paper>
         ) : null}
